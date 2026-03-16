@@ -224,23 +224,23 @@ try {
 
 ### Example Request Flow
 
-```
-Client                         HashGuard Server
-  │
-  ├─ POST /pow/challenges ──────────────────────>
-  │  (context: "login")
-  │
-  │  <─────────────── { challengeId, seed, target, ... }
-  │
-  ├─ [Compute nonce locally for ~1 second]
-  │
-  ├─ POST /pow/verifications ──────────────────>
-  │  (challengeId, nonce, solveTime)
-  │
-  │  <─────────────── { proofToken, expiresAt }
-  │
-  ├─ POST /api/protected with token ──> Your Backend
-     X-Proof-Token: proofToken
+```mermaid
+sequenceDiagram
+    participant Client
+    participant HS as HashGuard Server
+    participant Backend as Your Backend
+
+    Client->>HS: POST /pow/challenges<br/>context: "login"
+    HS-->>Client: challengeId, seed, target, ...
+
+    Note over Client: Compute nonce locally<br/>~1 second
+
+    Client->>HS: POST /pow/verifications<br/>challengeId, nonce, solveTime
+    HS-->>Client: proofToken, expiresAt
+
+    Client->>Backend: POST /api/protected<br/>X-Proof-Token: proofToken
+    Backend->>Backend: Verify token locally or<br/>call introspect endpoint
+    Backend-->>Client: 200 OK + Protected Resource
 ```
 
 ## Browser Usage
