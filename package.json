@@ -1,6 +1,6 @@
 {
-  "name": "@hashguard/client",
-  "version": "1.0.0",
+  "name": "hashguard-client",
+  "version": "0.0.1",
   "description": "Official TypeScript/JavaScript client for Hashguard Proof-of-Work CAPTCHA service",
   "author": "vientorepublic",
   "license": "MIT",
@@ -56,9 +56,9 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/vientorepublic/hashguard.git"
+    "url": "https://github.com/vientorepublic/hashguard-client.git"
   },
   "bugs": {
-    "url": "https://github.com/vientorepublic/hashguard/issues"
+    "url": "https://github.com/vientorepublic/hashguard-client/issues"
   }
 }
