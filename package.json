@@ -1,0 +1,64 @@
+{
+  "name": "@hashguard/client",
+  "version": "1.0.0",
+  "description": "Official TypeScript/JavaScript client for Hashguard Proof-of-Work CAPTCHA service",
+  "author": "vientorepublic",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "module": "./dist/index.mjs",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc && node scripts/build-esm.js",
+    "dev": "tsc --watch",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:cov": "jest --coverage",
+    "lint": "eslint src test --fix",
+    "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
+    "prepublishOnly": "npm run build && npm run test"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@eslint/js": "^9.18.0",
+    "@typescript-eslint/eslint-plugin": "^7.18.0",
+    "@typescript-eslint/parser": "^7.18.0",
+    "@types/node": "^22.10.7",
+    "@types/jest": "^30.0.0",
+    "typescript": "^5.7.3",
+    "jest": "^30.0.0",
+    "ts-jest": "^29.2.5",
+    "eslint": "^9.18.0",
+    "eslint-config-prettier": "^10.0.1",
+    "eslint-plugin-prettier": "^5.2.2",
+    "prettier": "^3.4.2",
+    "esbuild": "^0.21.5"
+  },
+  "keywords": [
+    "pow",
+    "proof-of-work",
+    "captcha",
+    "bot-protection",
+    "sha256",
+    "hashguard"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vientorepublic/hashguard.git"
+  },
+  "bugs": {
+    "url": "https://github.com/vientorepublic/hashguard/issues"
+  }
+}
