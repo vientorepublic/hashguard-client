@@ -1,9 +1,9 @@
 /**
  * Lazy loader for the WASM-accelerated hashguard core.
  *
- * Call {@link initHashGuardWasm} once at application start-up.  After a
- * successful init all calls to `sha256hex`, `verifyProof`, and `solvePow`
- * automatically use the WASM implementation instead of the pure-JS fallback.
+ * Call {@link initHashGuardWasm} explicitly once at application start-up.
+ * After a successful init all calls to `sha256hex`, `verifyProof`, and
+ * `solvePow` use the WASM implementation instead of the pure-JS fallback.
  * If the WASM artefacts are not present (e.g. fresh checkout before
  * `npm run build:wasm`) initialization silently returns `false` and the SDK
  * continues to work with the JS implementation.
@@ -93,17 +93,9 @@ export async function initHashGuardWasm(): Promise<boolean> {
 
 /** Returns the loaded WASM module, or `null` if not yet initialised. */
 export function getWasmModule(): WasmFunctions | null {
-  // Automatically attempt WASM initialization in the background.
-  // Hash operations remain synchronous and transparently fall back to JS
-  // until initialization succeeds.
-  if (!_wasm) {
-    void initHashGuardWasm();
-  }
+  // Explicit initialization model: caller must invoke initHashGuardWasm().
   return _wasm;
 }
-
-// Try once at module load so WASM is ready ASAP in common cases.
-void initHashGuardWasm();
 
 // ── internal ──────────────────────────────────────────────────────────────────
 
