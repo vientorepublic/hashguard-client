@@ -28,7 +28,12 @@
     "test:cov": "jest --coverage",
     "lint": "eslint src test --fix",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
-    "prepublishOnly": "npm run build && npm run test"
+    "format:check": "prettier --check \"src/**/*.ts\" \"test/**/*.ts\"",
+    "type-check": "tsc --noEmit",
+    "prepublishOnly": "npm run type-check && npm run lint && npm run format:check && npm run test && npm run build",
+    "publish:patch": "npm version patch && npm publish",
+    "publish:minor": "npm version minor && npm publish",
+    "publish:major": "npm version major && npm publish"
   },
   "dependencies": {},
   "devDependencies": {
