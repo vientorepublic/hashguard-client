@@ -20,3 +20,4 @@ export { verifyProof, sha256hex } from './crypto';
 export { TokenValidator } from './token-validator';
 export { TokenCache } from './token-cache';
 export { ResourceGuard } from './resource-guard';
+export { initHashGuardWasm, isWasmReady } from './wasm-loader';

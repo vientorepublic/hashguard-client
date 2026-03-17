@@ -4,6 +4,9 @@ import tsPlugin from '@typescript-eslint/eslint-plugin';
 import prettierPlugin from 'eslint-plugin-prettier/recommended';
 
 export default [
+  {
+    ignores: ['dist/**', 'src/wasm-pkg/**'],
+  },
   js.configs.recommended,
   {
     files: ['src/**/*.ts'],
@@ -66,6 +69,7 @@ export default [
         clearInterval: 'readonly',
         performance: 'readonly',
         // Jest globals
+        jest: 'readonly',
         describe: 'readonly',
         it: 'readonly',
         expect: 'readonly',
