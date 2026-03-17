@@ -33,9 +33,9 @@
     "format:check": "prettier --check \"src/**/*.ts\" \"test/**/*.ts\"",
     "type-check": "tsc --noEmit",
     "prepublishOnly": "npm run type-check && npm run lint && npm run format:check && npm run test && npm run build",
-    "publish:patch": "npm version patch && npm publish",
-    "publish:minor": "npm version minor && npm publish",
-    "publish:major": "npm version major && npm publish"
+    "publish:patch": "npm version patch --no-git-tag-version && npm publish --access public",
+    "publish:minor": "npm version minor --no-git-tag-version && npm publish --access public",
+    "publish:major": "npm version major --no-git-tag-version && npm publish --access public"
   },
   "devDependencies": {
     "@eslint/js": "^9.18.0",
