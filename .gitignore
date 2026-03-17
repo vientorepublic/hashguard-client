@@ -6,3 +6,13 @@ coverage/
 .env
 .env.local
 .DS_Store
+
+# Rust / WASM build artefacts
+crate/target/
+
+# Generated WASM package (track only the committed .d.ts type stubs)
+src/wasm-pkg/*.js
+src/wasm-pkg/*.wasm
+src/wasm-pkg/*.ts
+!src/wasm-pkg/*.d.ts
+src/wasm-pkg/package.json

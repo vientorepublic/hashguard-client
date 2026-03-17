@@ -8,6 +8,7 @@ Defend your application against bot attacks by requiring clients to solve a SHA-
 
 - **Simple API**: Issue a challenge → Solve locally → Verify with server in 3 steps
 - **Cryptographically Sound**: SHA-256 based PoW (same as Bitcoin mining)
+- **Optional WASM Acceleration**: Rust/WASM hash + solver path for higher throughput
 - **Zero Dependencies**: Uses only Node.js built-ins and Fetch API
 - **Adaptive Difficulty**: Server automatically adjusts difficulty based on request rate
 - **Fast Solver**: Optimized nonce search with progress reporting
@@ -268,6 +269,37 @@ HashGuard Client works in modern browsers with the Fetch API:
 </script>
 ```
 
+## WASM Acceleration
+
+Hashguard Client includes an optional Rust/WASM fast path for hashing and nonce search.
+
+### Runtime Usage
+
+```typescript
+import { initHashGuardWasm, isWasmReady, solvePow } from 'hashguard-client';
+
+// Call once at startup (safe to call multiple times)
+const wasmOk = await initHashGuardWasm();
+console.log('WASM enabled:', wasmOk, isWasmReady());
+
+// Existing APIs automatically use WASM when ready
+const solved = solvePow(challenge.challengeId, challenge.seed, challenge.target);
+```
+
+Notes:
+
+- If WASM artifacts are unavailable, `initHashGuardWasm()` returns `false` and SDK falls back to pure TypeScript implementation.
+- Existing API surface remains unchanged (`solvePow`, `sha256hex`, `verifyProof`); acceleration is transparent after initialization.
+- For browser UX, run PoW in a Web Worker to avoid blocking the main thread.
+
+### Build WASM Artifacts (SDK development)
+
+```bash
+npm run build:wasm
+```
+
+This compiles Rust sources under `crate/` and regenerates files under `src/wasm-pkg/`.
+
 ## Advanced Usage
 
 ### Retry Logic
@@ -499,13 +531,16 @@ app.post('/api/login', async (req, res) => {
 
 ## Testing
 
-Run the Jest test suite:
+Run tests:
 
 ```bash
 npm test         # Run tests once
 npm run test:watch # Watch mode
 npm run test:cov   # Coverage report
+npm run test:e2e   # Build + real WASM e2e verification
 ```
+
+`test:e2e` validates the built SDK (`dist/index.mjs`) with real WASM initialization and PoW solving.
 
 ## License
 
