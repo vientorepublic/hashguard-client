@@ -1,6 +1,6 @@
 {
   "name": "hashguard-client",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "description": "Official TypeScript/JavaScript client for Hashguard Proof-of-Work CAPTCHA service",
   "author": "vientorepublic",
   "license": "MIT",
