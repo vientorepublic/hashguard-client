@@ -30,6 +30,8 @@ export default [
         setInterval: 'readonly',
         clearInterval: 'readonly',
         performance: 'readonly',
+        console: 'readonly',
+        Date: 'readonly',
         TextEncoder: 'readonly',
         RequestInit: 'readonly',
       },
