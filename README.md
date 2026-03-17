@@ -17,13 +17,13 @@ Defend your application against bot attacks by requiring clients to solve a SHA-
 ## Installation
 
 ```bash
-npm install @hashguard/client
+npm install hashguard-client
 ```
 
 ## Quick Start
 
 ```typescript
-import { HashGuardClient } from '@hashguard/client';
+import { HashGuardClient } from 'hashguard-client';
 
 const client = new HashGuardClient({
   baseUrl: 'https://pow.example.com',
@@ -100,7 +100,7 @@ const challenge = await client.issueChallenge('comment-post');
 Solve a challenge locally (used by `execute` internally):
 
 ```typescript
-import { solvePow } from '@hashguard/client';
+import { solvePow } from 'hashguard-client';
 
 const result = solvePow(challenge.challengeId, challenge.seed, challenge.target, {
   maxAttempts: 50_000_000,
@@ -197,7 +197,7 @@ interface SolverOptions {
 ## Error Handling
 
 ```typescript
-import { HashGuardError, SolverTimeoutError, HashGuardClient } from '@hashguard/client';
+import { HashGuardError, SolverTimeoutError, HashGuardClient } from 'hashguard-client';
 
 try {
   const result = await client.execute('login');
@@ -249,7 +249,7 @@ HashGuard Client works in modern browsers with the Fetch API:
 
 ```html
 <script type="module">
-  import { HashGuardClient } from 'https://cdn.jsdelivr.net/npm/@hashguard/client@latest/+esm';
+  import { HashGuardClient } from 'https://cdn.jsdelivr.net/npm/hashguard-client@latest/+esm';
 
   const client = new HashGuardClient({ baseUrl: 'https://pow.example.com' });
 
@@ -308,7 +308,7 @@ HashGuard Client provides utilities for validating and caching proof tokens on t
 For quick validation without calling the HashGuard server:
 
 ```typescript
-import { TokenValidator } from '@hashguard/client';
+import { TokenValidator } from 'hashguard-client';
 
 // Quick JWT format and expiration check
 const validation = TokenValidator.validateLocal(proofToken, {
@@ -330,7 +330,7 @@ console.log('Expires at:', validation.expiresAt);
 For definitive token validation with consumption (single-use):
 
 ```typescript
-import { HashGuardClient } from '@hashguard/client';
+import { HashGuardClient } from 'hashguard-client';
 
 const client = new HashGuardClient({
   baseUrl: 'https://pow.example.com',
@@ -354,7 +354,7 @@ if (!verification.valid) {
 For more sophisticated access control, use the `ResourceGuard` class:
 
 ```typescript
-import { HashGuardClient, ResourceGuard } from '@hashguard/client';
+import { HashGuardClient, ResourceGuard } from 'hashguard-client';
 
 const client = new HashGuardClient({ baseUrl: 'https://pow.example.com' });
 const guard = client.createResourceGuard({
@@ -382,7 +382,7 @@ res.json({ data: 'protected content' });
 Reduce server load by caching recent token validations:
 
 ```typescript
-import { TokenCache } from '@hashguard/client';
+import { TokenCache } from 'hashguard-client';
 
 const cache = new TokenCache(
   1000, // Max 1000 entries
@@ -410,7 +410,7 @@ cache.destroy();
 ### Token Introspection Methods
 
 ```typescript
-import { TokenValidator } from '@hashguard/client';
+import { TokenValidator } from 'hashguard-client';
 
 const token = 'eyJ...';
 
@@ -429,7 +429,7 @@ const expired = TokenValidator.isExpired(token, 10); // 10s clock skew
 
 ```typescript
 // === CLIENT SIDE ===
-import { HashGuardClient } from '@hashguard/client';
+import { HashGuardClient } from 'hashguard-client';
 
 const client = new HashGuardClient({ baseUrl: 'https://pow.example.com' });
 
@@ -455,7 +455,7 @@ if (loginResponse.ok) {
 }
 
 // === SERVER SIDE ===
-import { HashGuardClient, ResourceGuard } from '@hashguard/client';
+import { HashGuardClient, ResourceGuard } from 'hashguard-client';
 
 const client = new HashGuardClient({ baseUrl: 'https://pow.example.com' });
 const guard = client.createResourceGuard();
