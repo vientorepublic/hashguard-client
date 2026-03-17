@@ -27,6 +27,7 @@ export default [
         setInterval: 'readonly',
         clearInterval: 'readonly',
         performance: 'readonly',
+        TextEncoder: 'readonly',
         RequestInit: 'readonly',
       },
     },
