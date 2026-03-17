@@ -273,23 +273,24 @@ HashGuard Client works in modern browsers with the Fetch API:
 
 Hashguard Client includes an optional Rust/WASM fast path for hashing and nonce search.
 
-### Runtime Usage
+### Runtime Usage (Explicit Init)
 
 ```typescript
 import { initHashGuardWasm, isWasmReady, solvePow } from 'hashguard-client';
 
-// Call once at startup (safe to call multiple times)
+// Required: call once at startup (safe to call multiple times)
 const wasmOk = await initHashGuardWasm();
 console.log('WASM enabled:', wasmOk, isWasmReady());
 
-// Existing APIs automatically use WASM when ready
+// Existing APIs use WASM only after successful init
 const solved = solvePow(challenge.challengeId, challenge.seed, challenge.target);
 ```
 
 Notes:
 
 - If WASM artifacts are unavailable, `initHashGuardWasm()` returns `false` and SDK falls back to pure TypeScript implementation.
-- Existing API surface remains unchanged (`solvePow`, `sha256hex`, `verifyProof`); acceleration is transparent after initialization.
+- WASM is not auto-initialized. You must call `initHashGuardWasm()` explicitly.
+- Existing API surface remains unchanged (`solvePow`, `sha256hex`, `verifyProof`); acceleration is used only after initialization.
 - For browser UX, run PoW in a Web Worker to avoid blocking the main thread.
 
 ### Build WASM Artifacts (SDK development)
