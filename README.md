@@ -13,6 +13,7 @@ Defend your application against bot attacks by requiring clients to solve a SHA-
 - **Fast Solver**: Optimized nonce search with progress reporting
 - **Full TypeScript Support**: Complete type definitions included
 - **Works Everywhere**: Node.js, Bun, Deno, and modern browsers
+- **JWT Proof Token**: Server issues HMAC-SHA256 (`HS256`) signed JWT proof tokens
 
 ## Installation
 
@@ -128,7 +129,7 @@ const verification = await client.verifyChallenge(
 );
 
 // {
-//   proofToken: 'eyJ....',
+//   proofToken: 'eyJ...eyJ...sig',
 //   expiresAt: '2026-03-16T10:05:00.000Z'
 // }
 ```
@@ -151,6 +152,9 @@ if (tokenInfo.valid) {
 } else {
   // Token invalid, expired, or already used
 }
+
+// Note: if the server cannot safely verify token usage state,
+// introspection may fail with 503 / POW_TOKEN_STATE_UNAVAILABLE.
 ```
 
 ## Types
@@ -325,6 +329,9 @@ console.log('Issued at:', validation.issuedAt);
 console.log('Expires at:', validation.expiresAt);
 ```
 
+`TokenValidator` only checks structure/claims locally. It does not verify signature or single-use state.
+For security decisions, call `introspectToken` on your backend.
+
 ### Server-Side Token Verification (Authoritative)
 
 For definitive token validation with consumption (single-use):
@@ -348,6 +355,11 @@ if (!verification.valid) {
 
 // Proceed with protected action
 ```
+
+Security-first defaults:
+
+- `introspectToken(proofToken)` defaults to `consume=true`.
+- `ResourceGuard.checkAccess(..., { consume })` also defaults to consuming tokens when `consume` is omitted.
 
 ### Resource Access Guard
 

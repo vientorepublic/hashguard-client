@@ -74,9 +74,11 @@ export class ResourceGuard {
     token: string,
     options: ResourceAccessOptions
   ): Promise<ResourceAccessResult> {
+    const effectiveConsume = options.consume !== false;
+
     // Step 1: Quick local validation
     const localValidation = TokenValidator.validateLocal(token, {
-      consume: options.consume,
+      consume: effectiveConsume,
       maxAgeMs: options.maxAgeMs,
     });
 
@@ -89,7 +91,7 @@ export class ResourceGuard {
     }
 
     // Step 2: Check cache (only if not consuming the token)
-    if (options.consume !== true) {
+    if (!effectiveConsume) {
       const cached = this.cache.get(token);
       if (cached) {
         return {
@@ -102,12 +104,9 @@ export class ResourceGuard {
 
     // Step 3: Call server for authoritative verification
     try {
-      const verification = await this.client.introspectToken(
-        token,
-        options.consume === true
-      );
+      const verification = await this.client.introspectToken(token, effectiveConsume);
 
-      if (!options.consume) {
+      if (!effectiveConsume) {
         this.cache.set(token, verification);
       }
 

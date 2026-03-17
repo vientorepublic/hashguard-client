@@ -3,6 +3,7 @@ import { verifyProof, sha256hex } from '../src/crypto';
 import { SolverTimeoutError } from '../src/types';
 import { TokenValidator } from '../src/token-validator';
 import { TokenCache } from '../src/token-cache';
+import { ResourceGuard } from '../src/resource-guard';
 
 describe('Solver', () => {
   it('should find a valid nonce for an easy target', () => {
@@ -164,5 +165,43 @@ describe('TokenCache', () => {
       expect(cache.has('token1')).toBe(false);
       done();
     }, 150);
+  });
+});
+
+describe('ResourceGuard', () => {
+  it('should default to consume=true when consume option is omitted', async () => {
+    const payload = Buffer.from(
+      JSON.stringify({
+        sub: '203.0.113.5',
+        context: 'test',
+        iat: Math.floor(Date.now() / 1000),
+        exp: Math.floor(Date.now() / 1000) + 60,
+      })
+    ).toString('base64url');
+    const token = `header.${payload}.signature`;
+
+    const calls: boolean[] = [];
+    const client = {
+      introspectToken: async (_token: string, consume?: boolean) => {
+        calls.push(consume ?? false);
+        return {
+          valid: true,
+          subject: '203.0.113.5',
+          context: 'test',
+          issuedAt: new Date().toISOString(),
+          expiresAt: new Date(Date.now() + 60_000).toISOString(),
+        };
+      },
+    };
+
+    const guard = new ResourceGuard(client, { autoCleanupMs: null });
+    const result = await guard.checkAccess(token, {
+      token,
+      context: 'test',
+    });
+
+    expect(result.allowed).toBe(true);
+    expect(calls).toEqual([true]);
+    guard.destroy();
   });
 });
