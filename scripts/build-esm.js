@@ -1,25 +1,37 @@
 #!/usr/bin/env node
 /**
- * Convert CommonJS dist/index.js to ESM dist/index.mjs
- * using esbuild with format: esm
+ * Dual build: ESM (dist/index.mjs) + CJS (dist/index.cjs)
  */
 import esbuild from 'esbuild';
 
-async function buildESM() {
+const sharedOptions = {
+  entryPoints: ['src/index.ts'],
+  bundle: true,
+  target: 'es2020',
+  sourcemap: true,
+  platform: 'node',
+};
+
+async function build() {
   try {
     await esbuild.build({
-      entryPoints: ['src/index.ts'],
+      ...sharedOptions,
       outfile: 'dist/index.mjs',
       format: 'esm',
-      target: 'es2020',
-      sourcemap: true,
     });
     console.log('✓ Built dist/index.mjs (ESM)');
+
+    await esbuild.build({
+      ...sharedOptions,
+      outfile: 'dist/index.cjs',
+      format: 'cjs',
+    });
+    console.log('✓ Built dist/index.cjs (CJS)');
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    console.error('✗ Failed to build ESM:', message);
+    console.error('✗ Build failed:', message);
     process.exit(1);
   }
 }
 
-buildESM();
+build();
