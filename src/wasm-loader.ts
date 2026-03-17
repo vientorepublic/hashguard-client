@@ -29,6 +29,7 @@ interface WasmFunctions {
 }
 
 let _wasm: WasmFunctions | null = null;
+let _initPromise: Promise<boolean> | null = null;
 
 /** Returns `true` if the WASM module has been successfully initialised. */
 export function isWasmReady(): boolean {
@@ -45,27 +46,39 @@ export function isWasmReady(): boolean {
  */
 export async function initHashGuardWasm(): Promise<boolean> {
   if (_wasm !== null) return true;
+  if (_initPromise) return _initPromise;
 
-  try {
-    const [binaryMod, glueMod] = await Promise.all([
-      import('./wasm-pkg/wasm_binary.js') as Promise<{ WASM_BASE64: string }>,
-      import('./wasm-pkg/hashguard_wasm.js'),
-    ]);
+  _initPromise = (async () => {
+    try {
+      const [binaryMod, glueMod] = await Promise.all([
+        import('./wasm-pkg/wasm_binary.js') as Promise<{ WASM_BASE64: string }>,
+        import('./wasm-pkg/hashguard_wasm.js'),
+      ]);
 
-    const buffer = _decodeBase64(binaryMod.WASM_BASE64);
-    await glueMod.default(buffer);
-    _wasm = glueMod as unknown as WasmFunctions;
-    return true;
-  } catch {
-    // WASM artefacts not built yet, or WebAssembly not supported — silently fall back.
-    return false;
-  }
+      const buffer = _decodeBase64(binaryMod.WASM_BASE64);
+      await glueMod.default(buffer);
+      _wasm = glueMod as unknown as WasmFunctions;
+      return true;
+    } catch {
+      // WASM artefacts not built yet, or WebAssembly not supported — silently fall back.
+      return false;
+    }
+  })();
+
+  return _initPromise;
 }
 
 /** Returns the loaded WASM module, or `null` if not yet initialised. */
 export function getWasmModule(): WasmFunctions | null {
+  // Automatically attempt WASM initialization in the background.
+  // Hash operations remain synchronous and transparently fall back to JS
+  // until initialization succeeds.
+  void initHashGuardWasm();
   return _wasm;
 }
+
+// Try once at module load so WASM is ready ASAP in common cases.
+void initHashGuardWasm();
 
 // ── internal ──────────────────────────────────────────────────────────────────
 
