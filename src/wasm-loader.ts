@@ -45,22 +45,45 @@ export function isWasmReady(): boolean {
  *   implementation automatically.
  */
 export async function initHashGuardWasm(): Promise<boolean> {
-  if (_wasm !== null) return true;
-  if (_initPromise) return _initPromise;
+  if (_wasm !== null) {
+    console.log('[WASM Loader] WASM already initialized');
+    return true;
+  }
+  if (_initPromise) {
+    console.log('[WASM Loader] WASM initialization in progress...');
+    return _initPromise;
+  }
 
+  console.log('[WASM Loader] Starting WASM initialization');
   _initPromise = (async () => {
     try {
+      console.log('[WASM Loader] Loading WASM binary and glue modules');
       const [binaryMod, glueMod] = await Promise.all([
         import('./wasm-pkg/wasm_binary.js') as Promise<{ WASM_BASE64: string }>,
         import('./wasm-pkg/hashguard_wasm.js'),
       ]);
 
+      console.log(
+        '[WASM Loader] Decoding base64 binary, size:',
+        binaryMod.WASM_BASE64.length
+      );
       const buffer = _decodeBase64(binaryMod.WASM_BASE64);
+      console.log(
+        '[WASM Loader] Initializing WebAssembly instance, buffer size:',
+        buffer.byteLength
+      );
+
       await glueMod.default(buffer);
       _wasm = glueMod as unknown as WasmFunctions;
+
+      console.log('[WASM Loader] ✓ WASM initialization successful');
       return true;
-    } catch {
+    } catch (err) {
       // WASM artefacts not built yet, or WebAssembly not supported — silently fall back.
+      console.warn(
+        '[WASM Loader] ✗ WASM initialization failed, falling back to JS:',
+        err
+      );
       return false;
     }
   })();
@@ -73,7 +96,9 @@ export function getWasmModule(): WasmFunctions | null {
   // Automatically attempt WASM initialization in the background.
   // Hash operations remain synchronous and transparently fall back to JS
   // until initialization succeeds.
-  void initHashGuardWasm();
+  if (!_wasm) {
+    void initHashGuardWasm();
+  }
   return _wasm;
 }
 
