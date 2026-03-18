@@ -40,6 +40,36 @@ export interface SolveResult {
   solveTimeMs: number;
 }
 
+/** Progress/ETA snapshot emitted by the local solver. */
+export interface SolverEstimate {
+  /** Emission phase. */
+  phase: 'progress' | 'complete' | 'timeout';
+  /** Whether the active solver path is WASM-backed. */
+  usingWasm: boolean;
+  /** Difficulty bits used for the estimate, if known. */
+  difficultyBits: number | null;
+  /** Attempts completed so far. */
+  attempts: number;
+  /** Wall-clock time elapsed in milliseconds. */
+  elapsedMs: number;
+  /** Current throughput in hashes per second. */
+  hashRate: number;
+  /** Heuristic expected total attempts for the current difficulty. */
+  expectedTotalAttempts: number | null;
+  /** Heuristic remaining attempts until completion. */
+  estimatedRemainingAttempts: number | null;
+  /** Heuristic remaining time in milliseconds. */
+  estimatedRemainingMs: number | null;
+  /** Heuristic total solve time in milliseconds. */
+  estimatedTotalMs: number | null;
+  /** Estimated completion timestamp in epoch milliseconds. */
+  estimatedCompletionAt: number | null;
+  /** Fraction of the attempt budget already consumed, clamped to [0, 1]. */
+  attemptProgress: number;
+  /** Fraction of the time budget already consumed, clamped to [0, 1]. */
+  timeProgress: number;
+}
+
 /** Return value of {@link HashGuardClient.execute} – combines all three steps. */
 export interface PowFlowResult {
   challenge: Challenge;
@@ -80,10 +110,20 @@ export interface SolverOptions {
    */
   timeoutMs?: number;
   /**
+   * Optional explicit difficulty bits used for ETA estimation.
+   * If omitted, the solver infers an estimate from `targetHex`.
+   */
+  difficultyBits?: number;
+  /**
    * Called every `progressInterval` attempts so the caller can
    * update a progress bar or cancel early.
    */
   onProgress?: (attempts: number) => void;
+  /**
+   * Called with heuristic ETA/progress snapshots during solving and again when
+   * the solver completes or times out.
+   */
+  onEstimate?: (estimate: SolverEstimate) => void;
   /**
    * How often to invoke `onProgress`, measured in attempts
    * (default: `100_000`).

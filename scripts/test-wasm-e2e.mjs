@@ -22,12 +22,26 @@ async function run() {
   const challengeId = 'e2e-challenge';
   const seed = 'e2e-seed';
   const easyTarget = 'ffff' + 'f'.repeat(60);
+  const estimateEvents = [];
 
   const solved = solvePow(challengeId, seed, easyTarget, {
     maxAttempts: 10_000,
     timeoutMs: 10_000,
     progressInterval: 100,
+    difficultyBits: 0,
+    onEstimate: (estimate) => estimateEvents.push(estimate),
   });
+
+  assert.equal(
+    estimateEvents.length > 0,
+    true,
+    'ETA callback should emit at least once'
+  );
+  assert.equal(
+    estimateEvents[estimateEvents.length - 1].phase,
+    'complete',
+    'Last ETA event should be complete'
+  );
 
   assert.equal(
     verifyProof(challengeId, seed, solved.nonce, easyTarget),

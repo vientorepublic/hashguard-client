@@ -1,6 +1,6 @@
 import { solvePow } from '../src/solver';
 import { verifyProof, sha256hex } from '../src/crypto';
-import { SolverTimeoutError } from '../src/types';
+import { SolverEstimate, SolverTimeoutError } from '../src/types';
 import { TokenValidator } from '../src/token-validator';
 import { TokenCache } from '../src/token-cache';
 import { ResourceGuard } from '../src/resource-guard';
@@ -57,6 +57,30 @@ describe('Solver', () => {
     expect(result.attempts).toBeGreaterThan(0);
     // At least one progress report should have been made with 100 interval
     expect(progressCalls.length).toBeGreaterThanOrEqual(0);
+  });
+
+  it('should emit ETA estimates during JS solving', () => {
+    const challengeId = 'estimate-id';
+    const seed = 'estimate-seed';
+    const impossibleTarget = '0'.repeat(64);
+    const estimateEvents: SolverEstimate[] = [];
+
+    expect(() => {
+      solvePow(challengeId, seed, impossibleTarget, {
+        maxAttempts: 120,
+        timeoutMs: 60_000,
+        progressInterval: 25,
+        difficultyBits: 20,
+        onEstimate: (estimate) => estimateEvents.push(estimate),
+      });
+    }).toThrow(SolverTimeoutError);
+
+    expect(estimateEvents.length).toBeGreaterThan(0);
+    expect(estimateEvents.some((event) => event.phase === 'progress')).toBe(true);
+    expect(estimateEvents[estimateEvents.length - 1]?.phase).toBe('timeout');
+    expect(estimateEvents[0]?.usingWasm).toBe(false);
+    expect(estimateEvents[0]?.difficultyBits).toBe(20);
+    expect(estimateEvents[0]?.hashRate).toBeGreaterThanOrEqual(0);
   });
 });
 

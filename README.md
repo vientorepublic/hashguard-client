@@ -284,6 +284,21 @@ console.log('WASM enabled:', wasmOk, isWasmReady());
 
 // Existing APIs use WASM only after successful init
 const solved = solvePow(challenge.challengeId, challenge.seed, challenge.target);
+
+const solvedWithEta = solvePow(
+  challenge.challengeId,
+  challenge.seed,
+  challenge.target,
+  {
+    difficultyBits: challenge.difficultyBits,
+    progressInterval: 25_000,
+    onEstimate: (estimate) => {
+      console.log('ETA phase:', estimate.phase);
+      console.log('Hash rate:', Math.round(estimate.hashRate), 'H/s');
+      console.log('Remaining ms:', estimate.estimatedRemainingMs);
+    },
+  }
+);
 ```
 
 Notes:
@@ -291,7 +306,36 @@ Notes:
 - If WASM artifacts are unavailable, `initHashGuardWasm()` returns `false` and SDK falls back to pure TypeScript implementation.
 - WASM is not auto-initialized. You must call `initHashGuardWasm()` explicitly.
 - Existing API surface remains unchanged (`solvePow`, `sha256hex`, `verifyProof`); acceleration is used only after initialization.
+- When `onEstimate` is provided, the solver emits heuristic ETA snapshots derived from difficulty bits, observed hash rate, and current attempt/time budgets.
 - For browser UX, run PoW in a Web Worker to avoid blocking the main thread.
+
+### Solver ETA Callbacks
+
+```typescript
+import { solvePow } from 'hashguard-client';
+
+solvePow(challenge.challengeId, challenge.seed, challenge.target, {
+  difficultyBits: challenge.difficultyBits,
+  progressInterval: 50_000,
+  onEstimate: (estimate) => {
+    if (estimate.phase === 'progress') {
+      console.log('attempts:', estimate.attempts);
+      console.log('hashRate:', estimate.hashRate);
+      console.log('remaining:', estimate.estimatedRemainingMs);
+    }
+  },
+});
+```
+
+`onEstimate` payload fields:
+
+- `phase`: `progress`, `complete`, or `timeout`
+- `usingWasm`: whether the active solver path is WASM-backed
+- `difficultyBits`: explicit or inferred difficulty bits used by the estimate
+- `hashRate`: observed throughput in hashes/second
+- `estimatedRemainingMs`: heuristic remaining time based on observed throughput
+- `estimatedCompletionAt`: estimated completion timestamp in epoch milliseconds
+- `attemptProgress` / `timeProgress`: normalized budget consumption signals
 
 ### Build WASM Artifacts (SDK development)
 
