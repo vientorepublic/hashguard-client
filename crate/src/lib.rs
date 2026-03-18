@@ -43,6 +43,31 @@ pub fn solve(
     timeout_ms: f64,
     progress_interval: u32,
 ) -> i32 {
+    solve_batch(
+        challenge_id,
+        seed,
+        target_hex,
+        0,
+        max_attempts,
+        start_ms,
+        timeout_ms,
+        progress_interval,
+    )
+}
+
+/// Searches a nonce batch beginning at `start_nonce` and covering at most
+/// `batch_attempts` candidates.
+#[wasm_bindgen]
+pub fn solve_batch(
+    challenge_id: &str,
+    seed: &str,
+    target_hex: &str,
+    start_nonce: u32,
+    batch_attempts: u32,
+    start_ms: f64,
+    timeout_ms: f64,
+    progress_interval: u32,
+) -> i32 {
     let Some(target) = parse_target_bytes(target_hex) else {
         return -3;
     };
@@ -50,7 +75,8 @@ pub fn solve(
     let prefix = format!("{challenge_id}:{seed}:");
     let check_every = progress_interval.max(1);
 
-    for nonce in 0u32..max_attempts {
+    for offset in 0u32..batch_attempts {
+        let nonce = start_nonce + offset;
         let preimage = format!("{prefix}{nonce}");
         let mut h = Sha256::new();
         h.update(preimage.as_bytes());
@@ -61,7 +87,7 @@ pub fn solve(
         }
 
         // Check wall-clock timeout at the same cadence as the JS solver.
-        if nonce > 0 && nonce % check_every == 0 && Date::now() - start_ms > timeout_ms {
+        if offset > 0 && offset % check_every == 0 && Date::now() - start_ms > timeout_ms {
             return -2;
         }
     }

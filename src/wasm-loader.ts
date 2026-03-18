@@ -26,6 +26,16 @@ interface WasmFunctions {
     timeoutMs: number,
     progressInterval: number
   ): number;
+  solve_batch(
+    challengeId: string,
+    seed: string,
+    targetHex: string,
+    startNonce: number,
+    batchAttempts: number,
+    startMs: number,
+    timeoutMs: number,
+    progressInterval: number
+  ): number;
 }
 
 let _wasm: WasmFunctions | null = null;

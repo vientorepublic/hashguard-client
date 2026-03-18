@@ -60,7 +60,10 @@ export class HashGuardClient {
       challenge.challengeId,
       challenge.seed,
       challenge.target,
-      solverOptions
+      {
+        ...solverOptions,
+        difficultyBits: solverOptions?.difficultyBits ?? challenge.difficultyBits,
+      }
     );
     const verification = await this.verifyChallenge(
       challenge.challengeId,

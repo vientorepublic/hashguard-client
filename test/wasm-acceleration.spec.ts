@@ -12,6 +12,10 @@ type WasmMock = {
   sha256hex: jest.Mock<string, [string]>;
   verify_proof: jest.Mock<boolean, [string, string, string, string]>;
   solve: jest.Mock<number, [string, string, string, number, number, number, number]>;
+  solve_batch: jest.Mock<
+    number,
+    [string, string, string, number, number, number, number, number]
+  >;
 };
 
 const mockedGetWasmModule = getWasmModule as jest.MockedFunction<typeof getWasmModule>;
@@ -25,6 +29,9 @@ function createWasmMock(): WasmMock {
     solve: jest
       .fn<number, [string, string, string, number, number, number, number]>()
       .mockReturnValue(7),
+    solve_batch: jest
+      .fn<number, [string, string, string, number, number, number, number, number]>()
+      .mockReturnValue(-1),
   };
 }
 
@@ -86,5 +93,40 @@ describe('WASM acceleration path', () => {
         timeoutMs: 1,
       });
     }).toThrow(SolverTimeoutError);
+  });
+
+  it('solvePow should emit ETA snapshots while using batched WASM solving', () => {
+    const wasm = createWasmMock();
+    const estimates: Array<{ phase: string; usingWasm: boolean; attempts: number }> =
+      [];
+
+    wasm.solve_batch.mockReturnValueOnce(-1).mockReturnValueOnce(87);
+    wasm.sha256hex.mockReturnValue('d'.repeat(64));
+    mockedGetWasmModule.mockReturnValue(wasm);
+
+    const result = solvePow('challenge', 'seed', 'f'.repeat(64), {
+      maxAttempts: 1000,
+      timeoutMs: 10_000,
+      progressInterval: 50,
+      difficultyBits: 20,
+      onEstimate: (estimate) => {
+        estimates.push({
+          phase: estimate.phase,
+          usingWasm: estimate.usingWasm,
+          attempts: estimate.attempts,
+        });
+      },
+    });
+
+    expect(wasm.solve).not.toHaveBeenCalled();
+    expect(wasm.solve_batch).toHaveBeenCalledTimes(2);
+    expect(estimates[0]).toEqual({ phase: 'progress', usingWasm: true, attempts: 50 });
+    expect(estimates[estimates.length - 1]).toEqual({
+      phase: 'complete',
+      usingWasm: true,
+      attempts: 88,
+    });
+    expect(result.nonce).toBe('87');
+    expect(result.hash).toBe('d'.repeat(64));
   });
 });
