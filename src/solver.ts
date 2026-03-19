@@ -21,8 +21,8 @@ export function solvePow(
   targetHex: string,
   options: SolverOptions = {}
 ): SolveResult {
-  const maxAttempts = Math.max(1, options.maxAttempts ?? 50_000_000);
-  const timeoutMs = Math.max(1, options.timeoutMs ?? 120_000);
+  const maxAttempts = Math.max(1, options.maxAttempts ?? 200_000_000);
+  const timeoutMs = Math.max(1, options.timeoutMs ?? 300_000);
   const progressInterval = Math.max(1, options.progressInterval ?? 100_000);
 
   // ── Validate targetHex format ─────────────────────────────────────────────

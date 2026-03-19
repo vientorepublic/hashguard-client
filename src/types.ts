@@ -101,12 +101,18 @@ export interface HashGuardClientOptions {
 export interface SolverOptions {
   /**
    * Maximum number of nonce candidates to try before giving up
-   * (default: `50_000_000`).
+   * (default: `200_000_000`).
+   *
+   * At 26-bit difficulty the expected nonce count is ~67 M; 200 M covers the
+   * ~95th-percentile worst case. `timeoutMs` acts as an additional safety net.
    */
   maxAttempts?: number;
   /**
-   * Wall-clock time budget in milliseconds (default: `120_000`).
+   * Wall-clock time budget in milliseconds (default: `300_000`).
    * The solver throws {@link SolverTimeoutError} if this is exceeded.
+   *
+   * Matches the server-side `POW_CHALLENGE_TTL_SECONDS` default of 300 s so
+   * the solver never gives up before the challenge itself expires.
    */
   timeoutMs?: number;
   /**
