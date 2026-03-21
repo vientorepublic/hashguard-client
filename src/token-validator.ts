@@ -11,13 +11,22 @@ interface JwtHeader {
 }
 
 function decodeBase64Url(value: string): Uint8Array {
-  if (typeof Buffer !== 'undefined') {
-    return Uint8Array.from(Buffer.from(value, 'base64url'));
+  const NodeBuffer = (
+    globalThis as {
+      Buffer?: { from(input: string, encoding: string): Uint8Array };
+    }
+  ).Buffer;
+  if (NodeBuffer) {
+    return Uint8Array.from(NodeBuffer.from(value, 'base64url'));
   }
 
   const normalized = value.replace(/-/g, '+').replace(/_/g, '/');
   const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=');
-  const binary = atob(padded);
+  const atobFn = globalThis.atob;
+  if (typeof atobFn !== 'function') {
+    throw new Error('Base64 decoding is not available in this runtime');
+  }
+  const binary = atobFn(padded);
   const bytes = new Uint8Array(binary.length);
 
   for (let index = 0; index < binary.length; index += 1) {
@@ -28,7 +37,11 @@ function decodeBase64Url(value: string): Uint8Array {
 }
 
 function decodeBase64UrlToString(value: string): string {
-  return new TextDecoder().decode(decodeBase64Url(value));
+  const TextDecoderCtor = globalThis.TextDecoder;
+  if (!TextDecoderCtor) {
+    throw new Error('TextDecoder is not available in this runtime');
+  }
+  return new TextDecoderCtor().decode(decodeBase64Url(value));
 }
 
 function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
@@ -38,12 +51,20 @@ function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
   ) as ArrayBuffer;
 }
 
-function getSubtleCrypto(): SubtleCrypto {
+function getSubtleCrypto() {
   if (!globalThis.crypto?.subtle) {
     throw new Error('Web Crypto API is not available in this runtime');
   }
 
   return globalThis.crypto.subtle;
+}
+
+function getTextEncoder() {
+  const TextEncoderCtor = globalThis.TextEncoder;
+  if (!TextEncoderCtor) {
+    throw new Error('TextEncoder is not available in this runtime');
+  }
+  return new TextEncoderCtor();
 }
 
 /**
@@ -376,7 +397,7 @@ export class TokenValidator {
         },
         key,
         toArrayBuffer(decodeBase64Url(encodedSignature)),
-        toArrayBuffer(new TextEncoder().encode(`${encodedHeader}.${encodedPayload}`))
+        toArrayBuffer(getTextEncoder().encode(`${encodedHeader}.${encodedPayload}`))
       );
     } catch {
       return false;
