@@ -1,4 +1,50 @@
-import { TokenValidationResult, TokenValidationOptions } from './types';
+import {
+  ProofTokenVerificationKey,
+  TokenValidationOptions,
+  TokenValidationResult,
+} from './types';
+
+interface JwtHeader {
+  alg?: string;
+  typ?: string;
+  kid?: string;
+}
+
+function decodeBase64Url(value: string): Uint8Array {
+  if (typeof Buffer !== 'undefined') {
+    return Uint8Array.from(Buffer.from(value, 'base64url'));
+  }
+
+  const normalized = value.replace(/-/g, '+').replace(/_/g, '/');
+  const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=');
+  const binary = atob(padded);
+  const bytes = new Uint8Array(binary.length);
+
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+
+  return bytes;
+}
+
+function decodeBase64UrlToString(value: string): string {
+  return new TextDecoder().decode(decodeBase64Url(value));
+}
+
+function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  return bytes.buffer.slice(
+    bytes.byteOffset,
+    bytes.byteOffset + bytes.byteLength
+  ) as ArrayBuffer;
+}
+
+function getSubtleCrypto(): SubtleCrypto {
+  if (!globalThis.crypto?.subtle) {
+    throw new Error('Web Crypto API is not available in this runtime');
+  }
+
+  return globalThis.crypto.subtle;
+}
 
 /**
  * Validates proof tokens on the server side.
@@ -39,11 +85,22 @@ export class TokenValidator {
     }
 
     try {
-      const parts = token.split('.');
-      const payload = parts[1];
-      // JWT payload is base64url encoded
-      const decoded = Buffer.from(payload, 'base64url').toString('utf-8');
-      return JSON.parse(decoded);
+      return JSON.parse(decodeBase64UrlToString(token.split('.')[1]));
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Decodes a JWT header without verification.
+   */
+  static decodeHeader(token: string): JwtHeader | null {
+    if (!this.isValidJwtFormat(token)) {
+      return null;
+    }
+
+    try {
+      return JSON.parse(decodeBase64UrlToString(token.split('.')[0])) as JwtHeader;
     } catch {
       return null;
     }
@@ -190,5 +247,139 @@ export class TokenValidator {
       issuedAt: this.getIssuedAt(token),
       expiresAt: this.getExpiresAt(token),
     };
+  }
+
+  /**
+   * Performs stateless validation including ES256 signature verification.
+   *
+   * This verifies:
+   * - JWT structure
+   * - ES256 signature using the supplied public JWK
+   * - Required claims
+   * - Expiration and optional max-age
+   *
+   * Single-use consumption cannot be checked locally; use server introspection for that.
+   */
+  static async validateStateless(
+    token: string,
+    options: TokenValidationOptions = {}
+  ): Promise<TokenValidationResult> {
+    if (!token || typeof token !== 'string') {
+      return {
+        valid: false,
+        error: 'Token must be a non-empty string',
+      };
+    }
+
+    if (!this.isValidJwtFormat(token)) {
+      return {
+        valid: false,
+        error: 'Token has invalid JWT format',
+      };
+    }
+
+    if (!options.verificationKey) {
+      return {
+        valid: false,
+        error: 'verificationKey is required for stateless token validation',
+      };
+    }
+
+    const header = this.decodeHeader(token);
+    if (
+      !header ||
+      header.alg !== 'ES256' ||
+      header.typ !== 'JWT' ||
+      header.kid !== options.verificationKey.kid
+    ) {
+      return {
+        valid: false,
+        error: 'Token has an unexpected JWT header',
+      };
+    }
+
+    const signatureValid = await this.verifySignature(token, options.verificationKey);
+    if (!signatureValid) {
+      return {
+        valid: false,
+        error: 'Token signature is invalid',
+      };
+    }
+
+    const payload = this.decodePayload(token);
+    if (
+      !payload ||
+      typeof payload.jti !== 'string' ||
+      typeof payload.sub !== 'string' ||
+      typeof payload.context !== 'string' ||
+      typeof payload.iat !== 'number' ||
+      typeof payload.exp !== 'number'
+    ) {
+      return {
+        valid: false,
+        error: 'Token payload is malformed',
+      };
+    }
+
+    if (this.isExpired(token)) {
+      return {
+        valid: false,
+        error: 'Token has expired',
+      };
+    }
+
+    if (typeof options.maxAgeMs === 'number' && options.maxAgeMs > 0) {
+      const ageMs = Date.now() - payload.iat * 1000;
+      if (ageMs > options.maxAgeMs) {
+        return {
+          valid: false,
+          error: `Token age (${ageMs}ms) exceeds max age (${options.maxAgeMs}ms)`,
+        };
+      }
+    }
+
+    return {
+      valid: true,
+      subject: payload.sub,
+      context: payload.context,
+      issuedAt: new Date(payload.iat * 1000).toISOString(),
+      expiresAt: new Date(payload.exp * 1000).toISOString(),
+    };
+  }
+
+  private static async verifySignature(
+    token: string,
+    verificationKey: ProofTokenVerificationKey
+  ): Promise<boolean> {
+    try {
+      const [encodedHeader, encodedPayload, encodedSignature] = token.split('.');
+      const subtle = getSubtleCrypto();
+      const key = await subtle.importKey(
+        'jwk',
+        {
+          ...verificationKey,
+          ext: true,
+          key_ops: ['verify'],
+        },
+        {
+          name: 'ECDSA',
+          namedCurve: 'P-256',
+        },
+        false,
+        ['verify']
+      );
+
+      return await subtle.verify(
+        {
+          name: 'ECDSA',
+          hash: 'SHA-256',
+        },
+        key,
+        toArrayBuffer(decodeBase64Url(encodedSignature)),
+        toArrayBuffer(new TextEncoder().encode(`${encodedHeader}.${encodedPayload}`))
+      );
+    } catch {
+      return false;
+    }
   }
 }

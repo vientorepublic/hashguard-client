@@ -8,6 +8,7 @@ export {
   SolverOptions,
   SolverTimeoutError,
   HashGuardError,
+  ProofTokenVerificationKey,
   TokenValidationResult,
   TokenValidationOptions,
   ResourceAccessOptions,

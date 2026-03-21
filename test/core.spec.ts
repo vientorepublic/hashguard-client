@@ -1,9 +1,61 @@
+import * as crypto from 'crypto';
 import { solvePow } from '../src/solver';
 import { verifyProof, sha256hex } from '../src/crypto';
 import { SolverEstimate, SolverTimeoutError } from '../src/types';
+import { HashGuardClient } from '../src/client';
 import { TokenValidator } from '../src/token-validator';
 import { TokenCache } from '../src/token-cache';
 import { ResourceGuard } from '../src/resource-guard';
+import { ProofTokenVerificationKey } from '../src/types';
+
+function createSignedProofToken(overrides: Record<string, unknown> = {}): {
+  token: string;
+  verificationKey: ProofTokenVerificationKey;
+} {
+  const { privateKey, publicKey } = crypto.generateKeyPairSync('ec', {
+    namedCurve: 'prime256v1',
+  });
+  const exported = publicKey.export({ format: 'jwk' }) as {
+    x?: string;
+    y?: string;
+  };
+  const verificationKey: ProofTokenVerificationKey = {
+    kty: 'EC',
+    crv: 'P-256',
+    x: exported.x!,
+    y: exported.y!,
+    use: 'sig',
+    alg: 'ES256',
+    kid: 'test-kid',
+  };
+  const now = Math.floor(Date.now() / 1000);
+  const payload = {
+    jti: 'test-jti',
+    sub: '203.0.113.5',
+    context: 'test',
+    iat: now,
+    exp: now + 60,
+    ...overrides,
+  };
+  const header = {
+    alg: 'ES256',
+    typ: 'JWT',
+    kid: verificationKey.kid,
+  };
+  const encodedHeader = Buffer.from(JSON.stringify(header)).toString('base64url');
+  const encodedPayload = Buffer.from(JSON.stringify(payload)).toString('base64url');
+  const signature = crypto
+    .sign('sha256', Buffer.from(`${encodedHeader}.${encodedPayload}`, 'utf8'), {
+      key: privateKey,
+      dsaEncoding: 'ieee-p1363',
+    })
+    .toString('base64url');
+
+  return {
+    token: `${encodedHeader}.${encodedPayload}.${signature}`,
+    verificationKey,
+  };
+}
 
 describe('Solver', () => {
   it('should find a valid nonce for an easy target', () => {
@@ -141,6 +193,42 @@ describe('TokenValidator', () => {
     const result = TokenValidator.validateLocal(goodToken);
     // Will be invalid due to expiration, but format is OK
     expect(result).toBeDefined();
+  });
+
+  it('should validate an ES256 proof token statelessly', async () => {
+    const fixture = createSignedProofToken();
+
+    const result = await TokenValidator.validateStateless(fixture.token, {
+      verificationKey: fixture.verificationKey,
+    });
+
+    expect(result.valid).toBe(true);
+    expect(result.subject).toBe('203.0.113.5');
+    expect(result.context).toBe('test');
+  });
+
+  it('should reject stateless validation with the wrong verification key', async () => {
+    const fixture = createSignedProofToken();
+    const wrongKey = createSignedProofToken().verificationKey;
+
+    const result = await TokenValidator.validateStateless(fixture.token, {
+      verificationKey: wrongKey,
+    });
+
+    expect(result.valid).toBe(false);
+    expect(result.error).toBe('Token signature is invalid');
+  });
+
+  it('should let HashGuardClient validate tokens statelessly', async () => {
+    const fixture = createSignedProofToken();
+    const client = new HashGuardClient({
+      baseUrl: 'https://pow.example.com',
+      proofTokenVerificationKey: fixture.verificationKey,
+    });
+
+    const result = await client.validateTokenStatelessly(fixture.token);
+
+    expect(result.valid).toBe(true);
   });
 });
 

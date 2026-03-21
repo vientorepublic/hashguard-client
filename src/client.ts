@@ -6,6 +6,7 @@ import {
   SolverOptions,
   HashGuardClientOptions,
   HashGuardError,
+  ProofTokenVerificationKey,
   TokenValidationResult,
   ResourceAccessResult,
   ResourceAccessOptions,
@@ -29,6 +30,7 @@ export class HashGuardClient {
   private readonly routePrefix: string;
   private readonly timeout: number;
   private readonly headers: Record<string, string>;
+  private proofTokenVerificationKey?: ProofTokenVerificationKey;
 
   constructor(options: HashGuardClientOptions) {
     if (!options.baseUrl) {
@@ -38,6 +40,7 @@ export class HashGuardClient {
     this.routePrefix = options.routePrefix ?? 'v1';
     this.timeout = options.timeout ?? 10_000;
     this.headers = options.headers ?? {};
+    this.proofTokenVerificationKey = options.proofTokenVerificationKey;
   }
 
   /**
@@ -149,6 +152,25 @@ export class HashGuardClient {
   }
 
   /**
+   * Fetches and caches the public JWK used for stateless proof-token verification.
+   */
+  async getProofTokenVerificationKey(
+    forceRefresh = false
+  ): Promise<ProofTokenVerificationKey> {
+    if (this.proofTokenVerificationKey && !forceRefresh) {
+      return this.proofTokenVerificationKey;
+    }
+
+    const url = `${this.baseUrl}/${this.routePrefix}/pow/assertions/verification-key`;
+    const response = await this.request<ProofTokenVerificationKey>(url, {
+      method: 'GET',
+    });
+
+    this.proofTokenVerificationKey = response;
+    return response;
+  }
+
+  /**
    * Low-level HTTP helper.
    */
   private async request<T>(url: string, options: RequestInit): Promise<T> {
@@ -201,6 +223,23 @@ export class HashGuardClient {
    */
   validateTokenLocally(proofToken: string, maxAgeMs?: number): TokenValidationResult {
     return TokenValidator.validateLocal(proofToken, { maxAgeMs });
+  }
+
+  /**
+   * Validates a proof token statelessly using the server's public verification key.
+   *
+   * This verifies JWT signature and claims locally, but cannot detect whether the
+   * token has already been consumed. Use {@link introspectToken} for single-use checks.
+   */
+  async validateTokenStatelessly(
+    proofToken: string,
+    maxAgeMs?: number
+  ): Promise<TokenValidationResult> {
+    const verificationKey = await this.getProofTokenVerificationKey();
+    return TokenValidator.validateStateless(proofToken, {
+      maxAgeMs,
+      verificationKey,
+    });
   }
 
   /**
