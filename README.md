@@ -14,7 +14,7 @@ Defend your application against bot attacks by requiring clients to solve a SHA-
 - **Fast Solver**: Optimized nonce search with progress reporting
 - **Full TypeScript Support**: Complete type definitions included
 - **Works Everywhere**: Node.js, Bun, Deno, and modern browsers
-- **JWT Proof Token**: Server issues HMAC-SHA256 (`HS256`) signed JWT proof tokens
+- **JWT Proof Token**: Server issues ECDSA P-256 (`ES256`) signed JWT proof tokens
 
 ## Installation
 
@@ -32,7 +32,7 @@ const client = new HashGuardClient({
 });
 
 // Complete workflow: issue → solve → verify
-const result = await client.execute({ context: 'login' });
+const result = await client.execute('login');
 
 console.log('Proof token:', result.verification.proofToken);
 console.log('Attempts needed:', result.solveResult.attempts);
@@ -47,10 +47,12 @@ console.log('Time spent:', result.solveResult.solveTimeMs, 'ms');
 
 ```typescript
 const client = new HashGuardClient({
-  baseUrl: 'https://pow.example.com',  // Required
-  routePrefix?: 'v1',                  // Default: 'v1'
-  timeout?: 10_000,                    // Default: 10 seconds
-  headers?: { Authorization: '...' },  // Extra headers
+  baseUrl: 'https://pow.example.com',        // Required
+  routePrefix?: 'v1',                        // Default: 'v1'
+  timeout?: 10_000,                          // Default: 10 seconds
+  headers?: { Authorization: '...' },        // Extra headers
+  proofTokenVerificationKey?: publicJwk,     // Pre-supply a JWK for stateless validation
+  proofTokenJwks?: { keys: [publicJwk] },    // Pre-supply a JWKS for stateless validation
 });
 ```
 
@@ -192,10 +194,12 @@ interface SolveResult {
 }
 
 interface SolverOptions {
-  maxAttempts?: number; // Default: 50_000_000
-  timeoutMs?: number; // Default: 120_000
-  progressInterval?: number; // Default: 100_000
+  maxAttempts?: number; // Default: 200_000_000
+  timeoutMs?: number; // Default: 300_000
+  difficultyBits?: number; // Used for ETA estimation
+  progressInterval?: number; // Default: 100_000 (calls per onProgress)
   onProgress?: (attempts: number) => void;
+  onEstimate?: (estimate: SolverEstimate) => void;
 }
 ```
 
@@ -366,18 +370,16 @@ async function executeWithRetry(client, context, maxRetries = 3) {
 
 ### Custom Fetch Implementation
 
-If you need to customize HTTP behavior (e.g., custom agent for proxies), subclass the client:
+The internal `request` method is `private` and cannot be overridden via subclassing. To customize HTTP behavior (e.g., add a proxy agent), wrap the client and use the `headers` option for static header injection, or supply a custom global `fetch` before constructing the client:
 
 ```typescript
-class CustomClient extends HashGuardClient {
-  protected async request(url, options) {
-    const customOptions = {
-      ...options,
-      agent: myCustomAgent,
-    };
-    return super.request(url, customOptions);
-  }
-}
+import { HashGuardClient } from 'hashguard-client';
+
+// Inject static headers (e.g. Authorization, X-Request-ID)
+const client = new HashGuardClient({
+  baseUrl: 'https://pow.example.com',
+  headers: { Authorization: 'Bearer mytoken' },
+});
 ```
 
 ## Server-Side Proof Token Validation
