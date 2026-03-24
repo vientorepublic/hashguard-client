@@ -6,6 +6,8 @@ import {
   SolverOptions,
   HashGuardClientOptions,
   HashGuardError,
+  ProofTokenJwks,
+  ProofTokenVerificationKey,
   TokenValidationResult,
   ResourceAccessResult,
   ResourceAccessOptions,
@@ -29,6 +31,8 @@ export class HashGuardClient {
   private readonly routePrefix: string;
   private readonly timeout: number;
   private readonly headers: Record<string, string>;
+  private proofTokenJwks?: ProofTokenJwks;
+  private proofTokenVerificationKey?: ProofTokenVerificationKey;
 
   constructor(options: HashGuardClientOptions) {
     if (!options.baseUrl) {
@@ -38,6 +42,13 @@ export class HashGuardClient {
     this.routePrefix = options.routePrefix ?? 'v1';
     this.timeout = options.timeout ?? 10_000;
     this.headers = options.headers ?? {};
+    this.proofTokenJwks = options.proofTokenJwks;
+    this.proofTokenVerificationKey =
+      options.proofTokenVerificationKey ?? options.proofTokenJwks?.keys[0];
+
+    if (!this.proofTokenJwks && this.proofTokenVerificationKey) {
+      this.proofTokenJwks = { keys: [this.proofTokenVerificationKey] };
+    }
   }
 
   /**
@@ -149,6 +160,55 @@ export class HashGuardClient {
   }
 
   /**
+   * Fetches and caches the standard JWKS document used for stateless proof-token verification.
+   */
+  async getProofTokenJwks(forceRefresh = false): Promise<ProofTokenJwks> {
+    if (this.proofTokenJwks && !forceRefresh) {
+      return {
+        keys: this.proofTokenJwks.keys.map((key) => ({ ...key })),
+      };
+    }
+
+    const url = `${this.baseUrl}/.well-known/jwks.json`;
+    const response = await this.request<ProofTokenJwks>(url, {
+      method: 'GET',
+    });
+
+    if (!Array.isArray(response.keys) || response.keys.length === 0) {
+      throw new Error('JWKS endpoint returned no verification keys');
+    }
+
+    this.proofTokenJwks = {
+      keys: response.keys.map((key) => ({ ...key })),
+    };
+    this.proofTokenVerificationKey = this.proofTokenJwks.keys[0];
+    return {
+      keys: this.proofTokenJwks.keys.map((key) => ({ ...key })),
+    };
+  }
+
+  /**
+   * Backward-compatible helper that returns the first verification key from the server JWKS.
+   */
+  async getProofTokenVerificationKey(
+    forceRefresh = false
+  ): Promise<ProofTokenVerificationKey> {
+    if (this.proofTokenVerificationKey && !forceRefresh) {
+      return this.proofTokenVerificationKey;
+    }
+
+    const jwks = await this.getProofTokenJwks(forceRefresh);
+    const verificationKey = jwks.keys[0];
+
+    if (!verificationKey) {
+      throw new Error('JWKS endpoint returned no verification keys');
+    }
+
+    this.proofTokenVerificationKey = { ...verificationKey };
+    return { ...verificationKey };
+  }
+
+  /**
    * Low-level HTTP helper.
    */
   private async request<T>(url: string, options: RequestInit): Promise<T> {
@@ -201,6 +261,68 @@ export class HashGuardClient {
    */
   validateTokenLocally(proofToken: string, maxAgeMs?: number): TokenValidationResult {
     return TokenValidator.validateLocal(proofToken, { maxAgeMs });
+  }
+
+  /**
+   * Validates a proof token statelessly using the server's public verification key.
+   *
+   * This verifies JWT signature and claims locally, but cannot detect whether the
+   * token has already been consumed. Use {@link introspectToken} for single-use checks.
+   */
+  async validateTokenStatelessly(
+    proofToken: string,
+    maxAgeMs?: number
+  ): Promise<TokenValidationResult> {
+    const verificationKey = await this.resolveVerificationKeyForToken(proofToken);
+
+    if (!verificationKey) {
+      return {
+        valid: false,
+        error: 'No verification key matched the token kid',
+      };
+    }
+
+    return TokenValidator.validateStateless(proofToken, {
+      maxAgeMs,
+      verificationKey,
+    });
+  }
+
+  private async resolveVerificationKeyForToken(
+    proofToken: string
+  ): Promise<ProofTokenVerificationKey | undefined> {
+    const header = TokenValidator.decodeHeader(proofToken);
+    const headerKid = header?.kid;
+
+    if (
+      this.proofTokenVerificationKey &&
+      (!headerKid || this.proofTokenVerificationKey.kid === headerKid)
+    ) {
+      return { ...this.proofTokenVerificationKey };
+    }
+
+    const selectKey = (jwks: ProofTokenJwks): ProofTokenVerificationKey | undefined => {
+      if (!headerKid) {
+        return jwks.keys[0];
+      }
+
+      return jwks.keys.find((key) => key.kid === headerKid);
+    };
+
+    const cachedJwks = await this.getProofTokenJwks();
+    let verificationKey = selectKey(cachedJwks);
+
+    if (!verificationKey && headerKid) {
+      const refreshedJwks = await this.getProofTokenJwks(true);
+      verificationKey = selectKey(refreshedJwks);
+    }
+
+    if (verificationKey) {
+      this.proofTokenVerificationKey = { ...verificationKey };
+      return { ...verificationKey };
+    }
+
+    return undefined;
   }
 
   /**

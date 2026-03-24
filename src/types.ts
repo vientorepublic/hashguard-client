@@ -17,6 +17,23 @@ export interface VerificationResult {
   expiresAt: string; // ISO 8601
 }
 
+/** Public JWK exposed by the HashGuard server for stateless proof-token verification. */
+export interface ProofTokenVerificationKey {
+  kty: 'EC';
+  crv: 'P-256';
+  x: string;
+  y: string;
+  use: 'sig';
+  alg: 'ES256';
+  kid: string;
+  key_ops?: ['verify'];
+}
+
+/** Standard JWKS document exposed by the HashGuard server. */
+export interface ProofTokenJwks {
+  keys: ProofTokenVerificationKey[];
+}
+
 /** Response from POST /v1/pow/assertions/introspect */
 export interface IntrospectResult {
   valid: boolean;
@@ -95,6 +112,10 @@ export interface HashGuardClientOptions {
   timeout?: number;
   /** Extra headers appended to every request (e.g. `Authorization`). */
   headers?: Record<string, string>;
+  /** Optional public JWK used for stateless proof-token validation. */
+  proofTokenVerificationKey?: ProofTokenVerificationKey;
+  /** Optional JWKS document used for stateless proof-token validation. */
+  proofTokenJwks?: ProofTokenJwks;
 }
 
 /** Options controlling the local PoW solver. */
@@ -198,6 +219,8 @@ export interface TokenValidationOptions {
   consume?: boolean;
   /** Max allowed age in milliseconds; if exceeded, token is invalid. */
   maxAgeMs?: number;
+  /** Public JWK used for stateless JWT signature verification. */
+  verificationKey?: ProofTokenVerificationKey;
 }
 
 /** Options for resource access control. */
