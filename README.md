@@ -437,6 +437,13 @@ const validation = await TokenValidator.validateStateless(proofToken, {
 });
 ```
 
+To fetch the full JWKS document directly:
+
+```typescript
+const jwks = await client.getProofTokenJwks();
+const publicJwk = jwks.keys[0];
+```
+
 Stateless validation confirms token integrity and claims without a network round-trip.
 It still cannot determine whether a single-use token has already been consumed.
 For definitive access control, keep using `introspectToken` on your backend.

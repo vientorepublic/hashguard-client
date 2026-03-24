@@ -26,6 +26,12 @@ export interface ProofTokenVerificationKey {
   use: 'sig';
   alg: 'ES256';
   kid: string;
+  key_ops?: ['verify'];
+}
+
+/** Standard JWKS document exposed by the HashGuard server. */
+export interface ProofTokenJwks {
+  keys: ProofTokenVerificationKey[];
 }
 
 /** Response from POST /v1/pow/assertions/introspect */
@@ -108,6 +114,8 @@ export interface HashGuardClientOptions {
   headers?: Record<string, string>;
   /** Optional public JWK used for stateless proof-token validation. */
   proofTokenVerificationKey?: ProofTokenVerificationKey;
+  /** Optional JWKS document used for stateless proof-token validation. */
+  proofTokenJwks?: ProofTokenJwks;
 }
 
 /** Options controlling the local PoW solver. */

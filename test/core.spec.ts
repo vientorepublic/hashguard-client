@@ -6,7 +6,7 @@ import { HashGuardClient } from '../src/client';
 import { TokenValidator } from '../src/token-validator';
 import { TokenCache } from '../src/token-cache';
 import { ResourceGuard } from '../src/resource-guard';
-import { ProofTokenVerificationKey } from '../src/types';
+import { ProofTokenJwks, ProofTokenVerificationKey } from '../src/types';
 
 function createSignedProofToken(overrides: Record<string, unknown> = {}): {
   token: string;
@@ -27,6 +27,7 @@ function createSignedProofToken(overrides: Record<string, unknown> = {}): {
     use: 'sig',
     alg: 'ES256',
     kid: 'test-kid',
+    key_ops: ['verify'],
   };
   const now = Math.floor(Date.now() / 1000);
   const payload = {
@@ -229,6 +230,68 @@ describe('TokenValidator', () => {
     const result = await client.validateTokenStatelessly(fixture.token);
 
     expect(result.valid).toBe(true);
+  });
+
+  it('should fetch JWKS and select the matching key by kid', async () => {
+    const fixture = createSignedProofToken();
+    const otherKey = {
+      ...createSignedProofToken().verificationKey,
+      kid: 'other-kid',
+    };
+    const jwks: ProofTokenJwks = {
+      keys: [otherKey, fixture.verificationKey],
+    };
+    const fetchMock = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => jwks,
+    });
+
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    try {
+      const client = new HashGuardClient({
+        baseUrl: 'https://pow.example.com',
+      });
+
+      const result = await client.validateTokenStatelessly(fixture.token);
+
+      expect(result.valid).toBe(true);
+      expect(fetchMock).toHaveBeenCalledWith(
+        'https://pow.example.com/.well-known/jwks.json',
+        expect.objectContaining({
+          method: 'GET',
+        })
+      );
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('should return a clear error when no JWKS key matches token kid', async () => {
+    const fixture = createSignedProofToken();
+    const fetchMock = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        keys: [{ ...fixture.verificationKey, kid: 'different-kid' }],
+      }),
+    });
+
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    try {
+      const client = new HashGuardClient({
+        baseUrl: 'https://pow.example.com',
+      });
+
+      const result = await client.validateTokenStatelessly(fixture.token);
+
+      expect(result.valid).toBe(false);
+      expect(result.error).toBe('No verification key matched the token kid');
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 });
 
