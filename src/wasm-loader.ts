@@ -95,6 +95,10 @@ export async function initHashGuardWasm(): Promise<boolean> {
         err
       );
       return false;
+    } finally {
+      if (_wasm === null) {
+        _initPromise = null;
+      }
     }
   })();
 

@@ -384,7 +384,7 @@ class CustomClient extends HashGuardClient {
 
 HashGuard Client provides utilities for validating and caching proof tokens on the server side.
 
-### Local Token Validation (Fast, Non-Authoritative)
+### Local Token Validation (Fast Claims Check)
 
 For quick validation without calling the HashGuard server:
 
@@ -406,8 +406,40 @@ console.log('Issued at:', validation.issuedAt);
 console.log('Expires at:', validation.expiresAt);
 ```
 
-`TokenValidator` only checks structure/claims locally. It does not verify signature or single-use state.
-For security decisions, call `introspectToken` on your backend.
+`validateLocal` only checks structure and claims. It does not verify JWT signature or single-use state.
+
+### Stateless Signature Validation (Public-Key Verification)
+
+For stateless verification that also checks the ES256 signature:
+
+```typescript
+import { HashGuardClient } from 'hashguard-client';
+
+const client = new HashGuardClient({
+  baseUrl: 'https://pow.example.com',
+});
+
+const validation = await client.validateTokenStatelessly(proofToken, 300_000);
+
+if (!validation.valid) {
+  return res.status(403).json({ error: validation.error });
+}
+```
+
+If you already have the server's public JWK, you can also validate directly:
+
+```typescript
+import { TokenValidator } from 'hashguard-client';
+
+const validation = await TokenValidator.validateStateless(proofToken, {
+  verificationKey: publicJwk,
+  maxAgeMs: 300_000,
+});
+```
+
+Stateless validation confirms token integrity and claims without a network round-trip.
+It still cannot determine whether a single-use token has already been consumed.
+For definitive access control, keep using `introspectToken` on your backend.
 
 ### Server-Side Token Verification (Authoritative)
 
@@ -437,6 +469,7 @@ Security-first defaults:
 
 - `introspectToken(proofToken)` defaults to `consume=true`.
 - `ResourceGuard.checkAccess(..., { consume })` also defaults to consuming tokens when `consume` is omitted.
+- `ResourceGuard` uses stateless signature validation first when the client can fetch or is configured with a verification key.
 
 ### Resource Access Guard
 

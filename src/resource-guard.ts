@@ -43,6 +43,10 @@ export class ResourceGuard {
         token: string,
         consume?: boolean
       ) => Promise<TokenValidationResult>;
+      validateTokenStatelessly?: (
+        token: string,
+        maxAgeMs?: number
+      ) => Promise<TokenValidationResult>;
     },
     cacheOptions?: {
       maxEntries?: number;
@@ -77,10 +81,12 @@ export class ResourceGuard {
     const effectiveConsume = options.consume !== false;
 
     // Step 1: Quick local validation
-    const localValidation = TokenValidator.validateLocal(token, {
-      consume: effectiveConsume,
-      maxAgeMs: options.maxAgeMs,
-    });
+    const localValidation = this.client.validateTokenStatelessly
+      ? await this.client.validateTokenStatelessly(token, options.maxAgeMs)
+      : TokenValidator.validateLocal(token, {
+          consume: effectiveConsume,
+          maxAgeMs: options.maxAgeMs,
+        });
 
     if (!localValidation.valid) {
       return {
