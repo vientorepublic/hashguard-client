@@ -100,7 +100,7 @@ export interface PowFlowResult {
 export interface HashGuardClientOptions {
   /**
    * Base URL of the HashGuard server.
-   * @example "https://pow.example.com"
+   * @example "https://hashguard.viento.me"
    */
   baseUrl: string;
   /**

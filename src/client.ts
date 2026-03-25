@@ -21,7 +21,7 @@ import { ResourceGuard } from './resource-guard';
  *
  * Typical usage:
  * ```ts
- * const client = new HashGuardClient({ baseUrl: 'https://pow.example.com' });
+ * const client = new HashGuardClient({ baseUrl: 'https://hashguard.viento.me' });
  * const result = await client.execute({ context: 'login' });
  * console.log('Proof token:', result.verification.proofToken);
  * ```

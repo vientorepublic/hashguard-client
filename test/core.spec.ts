@@ -223,7 +223,7 @@ describe('TokenValidator', () => {
   it('should let HashGuardClient validate tokens statelessly', async () => {
     const fixture = createSignedProofToken();
     const client = new HashGuardClient({
-      baseUrl: 'https://pow.example.com',
+      baseUrl: 'https://hashguard.viento.me',
       proofTokenVerificationKey: fixture.verificationKey,
     });
 
@@ -251,14 +251,14 @@ describe('TokenValidator', () => {
 
     try {
       const client = new HashGuardClient({
-        baseUrl: 'https://pow.example.com',
+        baseUrl: 'https://hashguard.viento.me',
       });
 
       const result = await client.validateTokenStatelessly(fixture.token);
 
       expect(result.valid).toBe(true);
       expect(fetchMock).toHaveBeenCalledWith(
-        'https://pow.example.com/.well-known/jwks.json',
+        'https://hashguard.viento.me/.well-known/jwks.json',
         expect.objectContaining({
           method: 'GET',
         })
@@ -282,7 +282,7 @@ describe('TokenValidator', () => {
 
     try {
       const client = new HashGuardClient({
-        baseUrl: 'https://pow.example.com',
+        baseUrl: 'https://hashguard.viento.me',
       });
 
       const result = await client.validateTokenStatelessly(fixture.token);
