@@ -24,11 +24,13 @@ npm install hashguard-client
 
 ## Quick Start
 
+Official Hashguard Test Server is available at `https://hashguard.viento.me` for testing and development.
+
 ```typescript
 import { HashGuardClient } from 'hashguard-client';
 
 const client = new HashGuardClient({
-  baseUrl: 'https://pow.example.com',
+  baseUrl: 'https://hashguard.viento.me',
 });
 
 // Complete workflow: issue → solve → verify
@@ -47,7 +49,7 @@ console.log('Time spent:', result.solveResult.solveTimeMs, 'ms');
 
 ```typescript
 const client = new HashGuardClient({
-  baseUrl: 'https://pow.example.com',        // Required
+  baseUrl: 'https://hashguard.viento.me',        // Required
   routePrefix?: 'v1',                        // Default: 'v1'
   timeout?: 10_000,                          // Default: 10 seconds
   headers?: { Authorization: '...' },        // Extra headers
@@ -260,7 +262,7 @@ HashGuard Client works in modern browsers with the Fetch API:
 <script type="module">
   import { HashGuardClient } from 'https://cdn.jsdelivr.net/npm/hashguard-client@latest/+esm';
 
-  const client = new HashGuardClient({ baseUrl: 'https://pow.example.com' });
+  const client = new HashGuardClient({ baseUrl: 'https://hashguard.viento.me' });
 
   const result = await client.execute('comment');
 
@@ -377,7 +379,7 @@ import { HashGuardClient } from 'hashguard-client';
 
 // Inject static headers (e.g. Authorization, X-Request-ID)
 const client = new HashGuardClient({
-  baseUrl: 'https://pow.example.com',
+  baseUrl: 'https://hashguard.viento.me',
   headers: { Authorization: 'Bearer mytoken' },
 });
 ```
@@ -418,7 +420,7 @@ For stateless verification that also checks the ES256 signature:
 import { HashGuardClient } from 'hashguard-client';
 
 const client = new HashGuardClient({
-  baseUrl: 'https://pow.example.com',
+  baseUrl: 'https://hashguard.viento.me',
 });
 
 const validation = await client.validateTokenStatelessly(proofToken, 300_000);
@@ -458,7 +460,7 @@ For definitive token validation with consumption (single-use):
 import { HashGuardClient } from 'hashguard-client';
 
 const client = new HashGuardClient({
-  baseUrl: 'https://pow.example.com',
+  baseUrl: 'https://hashguard.viento.me',
 });
 
 // On your API backend
@@ -487,7 +489,7 @@ For more sophisticated access control, use the `ResourceGuard` class:
 ```typescript
 import { HashGuardClient, ResourceGuard } from 'hashguard-client';
 
-const client = new HashGuardClient({ baseUrl: 'https://pow.example.com' });
+const client = new HashGuardClient({ baseUrl: 'https://hashguard.viento.me' });
 const guard = client.createResourceGuard({
   maxEntries: 5000, // Cache up to 5000 tokens locally
   ttlMs: 300_000, // Cache for 5 minutes
@@ -562,7 +564,7 @@ const expired = TokenValidator.isExpired(token, 10); // 10s clock skew
 // === CLIENT SIDE ===
 import { HashGuardClient } from 'hashguard-client';
 
-const client = new HashGuardClient({ baseUrl: 'https://pow.example.com' });
+const client = new HashGuardClient({ baseUrl: 'https://hashguard.viento.me' });
 
 // Start login - solve PoW
 const powResult = await client.execute('login');
@@ -588,7 +590,7 @@ if (loginResponse.ok) {
 // === SERVER SIDE ===
 import { HashGuardClient, ResourceGuard } from 'hashguard-client';
 
-const client = new HashGuardClient({ baseUrl: 'https://pow.example.com' });
+const client = new HashGuardClient({ baseUrl: 'https://hashguard.viento.me' });
 const guard = client.createResourceGuard();
 
 app.post('/api/login', async (req, res) => {

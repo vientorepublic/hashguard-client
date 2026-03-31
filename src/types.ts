@@ -34,13 +34,25 @@ export interface ProofTokenJwks {
   keys: ProofTokenVerificationKey[];
 }
 
-/** Response from POST /v1/pow/assertions/introspect */
+/**
+ * Response from POST /v1/pow/assertions/introspect
+ *
+ * When valid=true, all token fields are guaranteed to be present.
+ * When valid=false, only the error field is populated (if available).
+ */
 export interface IntrospectResult {
+  /** Whether the token is valid and can be used. */
   valid: boolean;
+  /** Subject/IP that the token was issued to (only when valid=true). */
   subject?: string;
+  /** Custom context provided when the token was issued (only when valid=true). */
   context?: string;
+  /** Token issued time in ISO 8601 format (only when valid=true). */
   issuedAt?: string;
+  /** Token expiration time in ISO 8601 format (only when valid=true). */
   expiresAt?: string;
+  /** Error message if token validation failed (only when valid=false). */
+  error?: string;
 }
 
 // ── Local results ─────────────────────────────────────────────────────────────
@@ -100,7 +112,7 @@ export interface PowFlowResult {
 export interface HashGuardClientOptions {
   /**
    * Base URL of the HashGuard server.
-   * @example "https://pow.example.com"
+   * @example "https://hashguard.viento.me"
    */
   baseUrl: string;
   /**
