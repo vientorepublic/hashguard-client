@@ -42,6 +42,11 @@ export class HashGuardClient {
     this.routePrefix = options.routePrefix ?? 'v1';
     this.timeout = options.timeout ?? 10_000;
     this.headers = options.headers ?? {};
+
+    // Initialize JWKS cache:
+    // - Can be seeded with pre-fetched keys via options.proofTokenJwks
+    // - Will be lazily fetched from /.well-known/jwks.json on first access
+    // - Uses in-memory cache; call getProofTokenJwks(true) to force refresh
     this.proofTokenJwks = options.proofTokenJwks;
     this.proofTokenVerificationKey =
       options.proofTokenVerificationKey ?? options.proofTokenJwks?.keys[0];
@@ -161,6 +166,14 @@ export class HashGuardClient {
 
   /**
    * Fetches and caches the standard JWKS document used for stateless proof-token verification.
+   *
+   * Caching strategy:
+   * - First call fetches from /.well-known/jwks.json and caches in memory
+   * - Subsequent calls return cached copy (shallow copy to prevent mutations)
+   * - Pass forceRefresh=true to skip cache and refetch from server
+   *
+   * @param forceRefresh - If true, skip cache and fetch fresh keys from server
+   * @returns JWKS document with public verification keys
    */
   async getProofTokenJwks(forceRefresh = false): Promise<ProofTokenJwks> {
     if (this.proofTokenJwks && !forceRefresh) {
@@ -229,8 +242,26 @@ export class HashGuardClient {
       const data = (await response.json()) as Record<string, unknown>;
 
       if (!response.ok) {
-        const errorCode = (data.code as string) || 'UNKNOWN_ERROR';
-        const errorMessage = (data.message as string) || `HTTP ${response.status}`;
+        // Handle both simple error responses and validation errors
+        // Server may return { code, message } or { code, message: string[] }
+        let errorCode: string;
+        let errorMessage: string;
+
+        if (typeof data.code === 'string') {
+          errorCode = data.code;
+        } else {
+          errorCode = 'UNKNOWN_ERROR';
+        }
+
+        if (typeof data.message === 'string') {
+          errorMessage = data.message;
+        } else if (Array.isArray(data.message)) {
+          // Handle validation errors where message is an array
+          errorMessage = data.message.join('; ');
+        } else {
+          errorMessage = `HTTP ${response.status}`;
+        }
+
         throw new HashGuardError(response.status, errorCode, errorMessage);
       }
 
