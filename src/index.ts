@@ -1,7 +1,9 @@
 export {
   Challenge,
+  AssessmentResult,
   VerificationResult,
   IntrospectResult,
+  IntrospectionConstraints,
   PowFlowResult,
   SolveResult,
   HashGuardClientOptions,

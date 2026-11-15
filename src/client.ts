@@ -1,7 +1,9 @@
 import {
   Challenge,
+  AssessmentResult,
   VerificationResult,
   IntrospectResult,
+  IntrospectionConstraints,
   PowFlowResult,
   SolverOptions,
   HashGuardClientOptions,
@@ -22,7 +24,7 @@ import { ResourceGuard } from './resource-guard';
  * Typical usage:
  * ```ts
  * const client = new HashGuardClient({ baseUrl: 'https://hashguard.viento.me' });
- * const result = await client.execute({ context: 'login' });
+ * const result = await client.execute('login');
  * console.log('Proof token:', result.verification.proofToken);
  * ```
  */
@@ -31,6 +33,9 @@ export class HashGuardClient {
   private readonly routePrefix: string;
   private readonly timeout: number;
   private readonly headers: Record<string, string>;
+  private jwksRequest?: Promise<ProofTokenJwks>;
+  private jwksLastAttemptAt = -Infinity;
+  private static readonly JWKS_REFRESH_COOLDOWN_MS = 30_000;
   private proofTokenJwks?: ProofTokenJwks;
   private proofTokenVerificationKey?: ProofTokenVerificationKey;
 
@@ -56,29 +61,29 @@ export class HashGuardClient {
     }
   }
 
-  /**
-   * Complete PoW workflow: issue → solve → verify.
-   *
-   * Steps:
-   * 1. Request a new challenge from the server.
-   * 2. Solve it locally using the PoW solver.
-   * 3. Submit the solution and receive a proof token.
-   *
-   * @param context - Arbitrary string to categorize the challenge (e.g. "login").
-   * @param solverOptions - Options for controlling the local solver (timeouts, progress).
-   */
+  /** Assess every protected request; solve only when the server detects abuse. */
   async execute(
     context?: string,
     solverOptions?: SolverOptions
   ): Promise<PowFlowResult> {
-    const challenge = await this.issueChallenge(context);
+    const assessment = await this.assessRequest(context);
+    if (assessment.action === 'allow') {
+      return {
+        challengeRequired: false,
+        riskScore: assessment.riskScore,
+        challenge: null,
+        solveResult: null,
+        verification: assessment.verification,
+      };
+    }
+    const challenge = assessment.challenge;
     const solveResult = solvePow(
       challenge.challengeId,
       challenge.seed,
       challenge.target,
       {
         ...solverOptions,
-        difficultyBits: solverOptions?.difficultyBits ?? challenge.difficultyBits,
+        difficultyBits: challenge.difficultyBits,
       }
     );
     const verification = await this.verifyChallenge(
@@ -86,8 +91,28 @@ export class HashGuardClient {
       solveResult.nonce,
       solveResult.solveTimeMs
     );
+    return {
+      challengeRequired: true,
+      riskScore: assessment.riskScore,
+      challenge,
+      solveResult,
+      verification,
+    };
+  }
 
-    return { challenge, solveResult, verification };
+  async assessRequest(context?: string): Promise<AssessmentResult> {
+    const decision = await this.request<AssessmentResult>(
+      `${this.baseUrl}/${this.routePrefix}/pow/assessments`,
+      { method: 'POST', body: JSON.stringify(context ? { context } : {}) }
+    );
+    if (decision.action !== 'allow' && decision.action !== 'challenge') {
+      throw new HashGuardError(
+        0,
+        'INVALID_ASSESSMENT',
+        'Server returned an unknown risk decision'
+      );
+    }
+    return decision;
   }
 
   /**
@@ -96,10 +121,10 @@ export class HashGuardClient {
    * The returned challenge contains:
    * - A unique `challengeId` (UUID)
    * - A random `seed` (32-byte hex)
-   * - A difficulty level (`difficultyBits`, typically 20–26)
+   * - A difficulty level (`difficultyBits`, typically 16–24)
    * - A target value (`target`, 64-char hex)
    *
-   * Challenges expire after a server-configured TTL (default: 10 minutes).
+   * Challenges expire after a server-configured TTL (default: 5 minutes).
    */
   async issueChallenge(context?: string): Promise<Challenge> {
     const url = `${this.baseUrl}/${this.routePrefix}/pow/challenges`;
@@ -153,12 +178,16 @@ export class HashGuardClient {
    * @param proofToken - The token returned by {@link verifyChallenge}.
    * @param consume - Whether to consume the token (default: `true`).
    */
-  async introspectToken(proofToken: string, consume = true): Promise<IntrospectResult> {
+  async introspectToken(
+    proofToken: string,
+    consume = true,
+    expected: IntrospectionConstraints = {}
+  ): Promise<IntrospectResult> {
     const url = `${this.baseUrl}/${this.routePrefix}/pow/assertions/introspect`;
 
     const response = await this.request<IntrospectResult>(url, {
       method: 'POST',
-      body: JSON.stringify({ proofToken, consume }),
+      body: JSON.stringify({ proofToken, consume, ...expected }),
     });
 
     return response;
@@ -176,28 +205,31 @@ export class HashGuardClient {
    * @returns JWKS document with public verification keys
    */
   async getProofTokenJwks(forceRefresh = false): Promise<ProofTokenJwks> {
+    if (this.jwksRequest) return this.jwksRequest;
     if (this.proofTokenJwks && !forceRefresh) {
       return {
         keys: this.proofTokenJwks.keys.map((key) => ({ ...key })),
       };
     }
 
-    const url = `${this.baseUrl}/.well-known/jwks.json`;
-    const response = await this.request<ProofTokenJwks>(url, {
-      method: 'GET',
-    });
-
-    if (!Array.isArray(response.keys) || response.keys.length === 0) {
-      throw new Error('JWKS endpoint returned no verification keys');
+    this.jwksLastAttemptAt = Date.now();
+    this.jwksRequest = (async () => {
+      const response = await this.request<ProofTokenJwks>(
+        `${this.baseUrl}/.well-known/jwks.json`,
+        { method: 'GET' }
+      );
+      if (!Array.isArray(response.keys) || response.keys.length === 0) {
+        throw new Error('JWKS endpoint returned no verification keys');
+      }
+      this.proofTokenJwks = { keys: response.keys.map((key) => ({ ...key })) };
+      this.proofTokenVerificationKey = this.proofTokenJwks.keys[0];
+      return { keys: this.proofTokenJwks.keys.map((key) => ({ ...key })) };
+    })();
+    try {
+      return await this.jwksRequest;
+    } finally {
+      this.jwksRequest = undefined;
     }
-
-    this.proofTokenJwks = {
-      keys: response.keys.map((key) => ({ ...key })),
-    };
-    this.proofTokenVerificationKey = this.proofTokenJwks.keys[0];
-    return {
-      keys: this.proofTokenJwks.keys.map((key) => ({ ...key })),
-    };
   }
 
   /**
@@ -323,6 +355,14 @@ export class HashGuardClient {
     proofToken: string
   ): Promise<ProofTokenVerificationKey | undefined> {
     const header = TokenValidator.decodeHeader(proofToken);
+    if (
+      !header ||
+      header.alg !== 'ES256' ||
+      header.typ !== 'JWT' ||
+      typeof header.kid !== 'string' ||
+      !header.kid
+    )
+      return undefined;
     const headerKid = header?.kid;
 
     if (
@@ -340,10 +380,20 @@ export class HashGuardClient {
       return jwks.keys.find((key) => key.kid === headerKid);
     };
 
+    if (
+      !this.proofTokenJwks &&
+      !this.jwksRequest &&
+      Date.now() - this.jwksLastAttemptAt < HashGuardClient.JWKS_REFRESH_COOLDOWN_MS
+    )
+      return undefined;
     const cachedJwks = await this.getProofTokenJwks();
     let verificationKey = selectKey(cachedJwks);
 
-    if (!verificationKey && headerKid) {
+    if (
+      !verificationKey &&
+      headerKid &&
+      Date.now() - this.jwksLastAttemptAt >= HashGuardClient.JWKS_REFRESH_COOLDOWN_MS
+    ) {
       const refreshedJwks = await this.getProofTokenJwks(true);
       verificationKey = selectKey(refreshedJwks);
     }

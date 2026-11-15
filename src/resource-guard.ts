@@ -1,5 +1,6 @@
 import {
   ResourceAccessOptions,
+  IntrospectionConstraints,
   ResourceAccessResult,
   TokenValidationResult,
 } from './types';
@@ -41,7 +42,8 @@ export class ResourceGuard {
     private readonly client: {
       introspectToken: (
         token: string,
-        consume?: boolean
+        consume?: boolean,
+        expected?: IntrospectionConstraints
       ) => Promise<TokenValidationResult>;
       validateTokenStatelessly?: (
         token: string,
@@ -80,54 +82,94 @@ export class ResourceGuard {
   ): Promise<ResourceAccessResult> {
     const effectiveConsume = options.consume !== false;
 
-    // Step 1: Quick local validation
-    const localValidation = this.client.validateTokenStatelessly
-      ? await this.client.validateTokenStatelessly(token, options.maxAgeMs)
-      : TokenValidator.validateLocal(token, {
-          consume: effectiveConsume,
-          maxAgeMs: options.maxAgeMs,
-        });
+    // A consumed assertion must not remain approved in this guard's read cache.
+    if (effectiveConsume) this.cache.delete(token);
 
-    if (!localValidation.valid) {
-      return {
-        allowed: false,
-        reason: localValidation.error,
-        validationResult: localValidation,
-      };
-    }
+    try {
+      // Step 1: Quick local validation
+      const localValidation = this.client.validateTokenStatelessly
+        ? await this.client.validateTokenStatelessly(token, options.maxAgeMs)
+        : TokenValidator.validateLocal(token, {
+            consume: effectiveConsume,
+            maxAgeMs: options.maxAgeMs,
+          });
 
-    // Step 2: Check cache (only if not consuming the token)
-    if (!effectiveConsume) {
-      const cached = this.cache.get(token);
-      if (cached) {
+      if (!localValidation.valid) {
         return {
-          allowed: cached.valid,
-          reason: cached.valid ? undefined : cached.error,
-          validationResult: cached,
+          allowed: false,
+          reason: localValidation.error,
+          validationResult: localValidation,
         };
       }
-    }
 
-    // Step 3: Call server for authoritative verification
-    try {
-      const verification = await this.client.introspectToken(token, effectiveConsume);
+      if (
+        options.context !== undefined &&
+        localValidation.context !== options.context
+      ) {
+        return {
+          allowed: false,
+          reason: 'Context mismatch',
+          validationResult: localValidation,
+        };
+      }
 
+      if (
+        options.subject !== undefined &&
+        localValidation.subject !== options.subject
+      ) {
+        return {
+          allowed: false,
+          reason: 'Subject mismatch',
+          validationResult: localValidation,
+        };
+      }
+
+      // Step 2: Check cache (only if not consuming the token)
       if (!effectiveConsume) {
-        this.cache.set(token, verification);
+        const cached = this.cache.get(token);
+        if (cached) {
+          if (
+            (options.subject !== undefined && cached.subject !== options.subject) ||
+            (options.context !== undefined && cached.context !== options.context)
+          ) {
+            return {
+              allowed: false,
+              reason: 'Cached assertion binding mismatch',
+              validationResult: cached,
+            };
+          }
+          return {
+            allowed: cached.valid,
+            reason: cached.valid ? undefined : cached.error,
+            validationResult: cached,
+          };
+        }
+      }
+
+      // Step 3: Call server for authoritative verification
+      const verification = await this.client.introspectToken(token, effectiveConsume, {
+        expectedContext: options.context,
+        expectedSubject: options.subject,
+      });
+
+      if (options.subject !== undefined && verification.subject !== options.subject) {
+        return {
+          allowed: false,
+          reason: 'Subject mismatch',
+          validationResult: verification,
+        };
       }
 
       // Step 4: Context matching if specified
-      if (
-        options.context &&
-        verification.context &&
-        verification.context !== options.context
-      ) {
+      if (options.context !== undefined && verification.context !== options.context) {
         return {
           allowed: false,
           reason: `Context mismatch: expected "${options.context}", got "${verification.context}"`,
           validationResult: verification,
         };
       }
+
+      if (!effectiveConsume) this.cache.set(token, verification);
 
       return {
         allowed: verification.valid,

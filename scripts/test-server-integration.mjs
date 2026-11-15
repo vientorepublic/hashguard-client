@@ -48,12 +48,17 @@ async function runTest() {
       ),
     ]);
 
-    console.log('✓ Challenge solved:', {
-      nonce: solveResult.solveResult.nonce,
-      hash: solveResult.solveResult.hash.substring(0, 20) + '...',
-      attempts: solveResult.solveResult.attempts,
-      solveTimeMs: solveResult.solveResult.solveTimeMs,
+    console.log('✓ Adaptive decision:', {
+      challengeRequired: solveResult.challengeRequired,
+      riskScore: solveResult.riskScore,
     });
+    if (solveResult.challengeRequired)
+      console.log('✓ Challenge solved:', {
+        nonce: solveResult.solveResult.nonce,
+        hash: solveResult.solveResult.hash.substring(0, 20) + '...',
+        attempts: solveResult.solveResult.attempts,
+        solveTimeMs: solveResult.solveResult.solveTimeMs,
+      });
     console.log();
 
     // Step 3: Verify proof token validity

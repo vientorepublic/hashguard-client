@@ -55,6 +55,12 @@ export interface IntrospectResult {
   error?: string;
 }
 
+/** Constraints supplied by a trusted resource backend before consuming an assertion. */
+export interface IntrospectionConstraints {
+  expectedContext?: string;
+  expectedSubject?: string;
+}
+
 // ── Local results ─────────────────────────────────────────────────────────────
 
 /** Statistics returned after the local nonce-search completes. */
@@ -99,12 +105,27 @@ export interface SolverEstimate {
   timeProgress: number;
 }
 
-/** Return value of {@link HashGuardClient.execute} – combines all three steps. */
-export interface PowFlowResult {
-  challenge: Challenge;
-  solveResult: SolveResult;
-  verification: VerificationResult;
-}
+/** Server-authoritative adaptive decision. */
+export type AssessmentResult =
+  | { action: 'allow'; riskScore: number; verification: VerificationResult }
+  | { action: 'challenge'; riskScore: number; challenge: Challenge };
+
+/** Narrow with challengeRequired before accessing challenge or solveResult. */
+export type PowFlowResult =
+  | {
+      challengeRequired: false;
+      riskScore: number;
+      challenge: null;
+      solveResult: null;
+      verification: VerificationResult;
+    }
+  | {
+      challengeRequired: true;
+      riskScore: number;
+      challenge: Challenge;
+      solveResult: SolveResult;
+      verification: VerificationResult;
+    };
 
 // ── Configuration ─────────────────────────────────────────────────────────────
 
@@ -241,6 +262,8 @@ export interface ResourceAccessOptions {
   token: string;
   /** Optional context to match against (must match what was in challenge). */
   context?: string;
+  /** Original client IP to match against the signed subject. */
+  subject?: string;
   /** Whether to consume the token (default: true). */
   consume?: boolean;
   /** Max allowed age in milliseconds. */
