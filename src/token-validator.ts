@@ -85,7 +85,17 @@ export class TokenValidator {
    * @param token - The token string to validate.
    * @returns true if the token has valid JWT format.
    */
+  private static isTimestamp(value: unknown): value is number {
+    return (
+      typeof value === 'number' &&
+      Number.isSafeInteger(value) &&
+      value >= 0 &&
+      value <= 8_640_000_000_000
+    );
+  }
+
   static isValidJwtFormat(token: string): boolean {
+    if (typeof token !== 'string' || token.length > 2048) return false;
     const parts = token.split('.');
     return parts.length === 3 && parts.every((part) => /^[A-Za-z0-9_-]+$/.test(part));
   }
@@ -106,7 +116,10 @@ export class TokenValidator {
     }
 
     try {
-      return JSON.parse(decodeBase64UrlToString(token.split('.')[1]));
+      const payload: unknown = JSON.parse(decodeBase64UrlToString(token.split('.')[1]));
+      return payload !== null && typeof payload === 'object' && !Array.isArray(payload)
+        ? (payload as Record<string, unknown>)
+        : null;
     } catch {
       return null;
     }
@@ -136,13 +149,13 @@ export class TokenValidator {
    */
   static isExpired(token: string, clockSkewSeconds = 0): boolean {
     const payload = this.decodePayload(token);
-    if (!payload || typeof payload.exp !== 'number') {
+    if (!payload || !this.isTimestamp(payload.exp)) {
       return true; // Invalid or missing exp claim
     }
 
     const now = Math.floor(Date.now() / 1000);
     const expiresAt = payload.exp;
-    return now > expiresAt + clockSkewSeconds;
+    return now >= expiresAt + clockSkewSeconds;
   }
 
   /**
@@ -153,7 +166,7 @@ export class TokenValidator {
    */
   static getExpiresAt(token: string): string | undefined {
     const payload = this.decodePayload(token);
-    if (!payload || typeof payload.exp !== 'number') {
+    if (!payload || !this.isTimestamp(payload.exp)) {
       return undefined;
     }
 
@@ -169,7 +182,7 @@ export class TokenValidator {
    */
   static getIssuedAt(token: string): string | undefined {
     const payload = this.decodePayload(token);
-    if (!payload || typeof payload.iat !== 'number') {
+    if (!payload || !this.isTimestamp(payload.iat)) {
       return undefined;
     }
 
@@ -333,8 +346,8 @@ export class TokenValidator {
       typeof payload.jti !== 'string' ||
       typeof payload.sub !== 'string' ||
       typeof payload.context !== 'string' ||
-      typeof payload.iat !== 'number' ||
-      typeof payload.exp !== 'number'
+      !this.isTimestamp(payload.iat) ||
+      !this.isTimestamp(payload.exp)
     ) {
       return {
         valid: false,

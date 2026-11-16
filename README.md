@@ -2,11 +2,11 @@
 
 Official TypeScript/JavaScript client for the [Hashguard](https://github.com/vientorepublic/hashguard) Proof-of-Work CAPTCHA service.
 
-Defend your application against bot attacks by requiring clients to solve a SHA-256 computational puzzle before accessing protected resources.
+Defend your application against bot attacks with server-side risk assessment. Normal traffic receives a single-use assertion without computing PoW; suspicious traffic must solve an adaptive SHA-256 puzzle.
 
 ## Features
 
-- **Simple API**: Issue a challenge → Solve locally → Verify with server in 3 steps
+- **Adaptive API**: Assess → allow normally, or solve and verify when suspicious
 - **Cryptographically Sound**: SHA-256 based PoW (same as Bitcoin mining)
 - **Optional WASM Acceleration**: Rust/WASM hash + solver path for higher throughput
 - **Zero Dependencies**: Uses only Node.js built-ins and Fetch API
@@ -33,12 +33,14 @@ const client = new HashGuardClient({
   baseUrl: 'https://hashguard.viento.me',
 });
 
-// Complete workflow: issue → solve → verify
+// Assess every protected request; compute PoW only when required
 const result = await client.execute('login');
 
 console.log('Proof token:', result.verification.proofToken);
-console.log('Attempts needed:', result.solveResult.attempts);
-console.log('Time spent:', result.solveResult.solveTimeMs, 'ms');
+if (result.challengeRequired) {
+  console.log('Attempts needed:', result.solveResult.attempts);
+  console.log('Time spent:', result.solveResult.solveTimeMs, 'ms');
+}
 ```
 
 ## API Reference
@@ -62,7 +64,13 @@ const client = new HashGuardClient({
 
 ##### `execute(context?: string, solverOptions?: SolverOptions): Promise<PowFlowResult>`
 
-One-shot method combining issue → solve → verify:
+Assesses risk on the server. Low-risk responses return immediately with `challengeRequired: false`, `challenge: null`, and `solveResult: null`. A challenge response is solved and verified, returning `challengeRequired: true`. Both paths provide `verification.proofToken`.
+
+Requires a server with `POST /v1/pow/assessments`. Deploy the server before updating the SDK; there is no fallback that bypasses assessment on errors. This changes the `PowFlowResult` type: narrow with `challengeRequired` before reading solve statistics.
+
+Every token has a single-request budget. With `ResourceGuard`, pass the trusted original requester IP as `subject` and the endpoint label as `context`; both are checked before consuming the assertion. Obtain a fresh decision per protected request and have your backend consume the token with introspection, enforce its expected context and subject/IP, and retain its own authentication and hard limits. Local/stateless signature validation cannot enforce single use.
+
+
 
 ```typescript
 try {
@@ -83,9 +91,13 @@ try {
 }
 ```
 
+##### `assessRequest(context?: string): Promise<AssessmentResult>`
+
+Returns `{ action: 'allow', riskScore, verification }` or `{ action: 'challenge', riskScore, challenge }`. This method does not solve work; `execute()` handles both branches automatically. `429` and `503` errors propagate without retries or forced work.
+
 ##### `issueChallenge(context?: string): Promise<Challenge>`
 
-Request a new challenge from the server:
+Explicitly request work using the legacy endpoint. For adaptive behavior use `execute()` or `assessRequest()`:
 
 ```typescript
 const challenge = await client.issueChallenge('comment-post');
@@ -139,7 +151,7 @@ const verification = await client.verifyChallenge(
 // }
 ```
 
-##### `introspectToken(proofToken, consume?): Promise<IntrospectResult>`
+##### `introspectToken(proofToken, consume?, expected?): Promise<IntrospectResult>`
 
 Verify a proof token on your backend:
 
@@ -147,7 +159,8 @@ Verify a proof token on your backend:
 // Call this from your API server
 const tokenInfo = await client.introspectToken(
   request.headers['x-proof-token'],
-  true // consume=true is default; set false for read-only inspection
+  true, // consume=true is default; set false for read-only inspection
+  { expectedContext: 'search', expectedSubject: originalClientIp } // From trusted ingress
 );
 
 if (tokenInfo.valid) {
@@ -169,7 +182,7 @@ interface Challenge {
   challengeId: string; // UUID
   algorithm: 'sha256';
   seed: string; // 32-byte random hex
-  difficultyBits: number; // Typically 20–26
+  difficultyBits: number; // Typically 16–24
   target: string; // 64-char lowercase hex
   issuedAt: string; // ISO 8601
   expiresAt: string; // ISO 8601
@@ -228,7 +241,7 @@ try {
 
 ## How It Works
 
-1. **Issue Challenge**: Client requests a new challenge. Server generates a random seed and calculates a difficulty-based target.
+1. **Assess**: The server evaluates weighted traffic, short bursts and decaying verification failures. Low-risk clients receive a token immediately; suspicious clients receive a challenge.
 2. **Solve Locally**: Client performs SHA-256 hashing in a loop: `SHA-256(challengeId:seed:nonce)` until finding a nonce where the hash is ≤ target (lexicographic).
 3. **Verify & Receive Token**: Client submits the nonce. Server validates it and issues a single-use, expiring proof token.
 4. **Use Proof Token**: Client includes the proof token in requests to your protected endpoints. Your backend calls `/introspect` to verify it's valid.
