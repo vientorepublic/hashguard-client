@@ -379,4 +379,25 @@ describe('ResourceGuard', () => {
     expect(calls).toEqual([true]);
     guard.destroy();
   });
+
+  it('reports the configured maxEntries in getCacheStats', () => {
+    const client = {
+      introspectToken: jest.fn().mockResolvedValue({ valid: true }),
+    };
+    const guard = new ResourceGuard(client, {
+      maxEntries: 50,
+      autoCleanupMs: null,
+    });
+    expect(guard.getCacheStats()).toEqual({ size: 0, maxEntries: 50 });
+    guard.destroy();
+  });
+
+  it('defaults getCacheStats maxEntries to 1000 when unset', () => {
+    const client = {
+      introspectToken: jest.fn().mockResolvedValue({ valid: true }),
+    };
+    const guard = new ResourceGuard(client, { autoCleanupMs: null });
+    expect(guard.getCacheStats().maxEntries).toBe(1000);
+    guard.destroy();
+  });
 });

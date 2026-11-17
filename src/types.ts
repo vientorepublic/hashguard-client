@@ -258,8 +258,12 @@ export interface TokenValidationOptions {
 
 /** Options for resource access control. */
 export interface ResourceAccessOptions {
-  /** Proof token from the client. */
-  token: string;
+  /**
+   * Optional proof token. Retained for backward compatibility; the token is
+   * passed to `checkAccess` as its first argument and is not read here.
+   * @deprecated Pass the token as the first argument instead.
+   */
+  token?: string;
   /** Optional context to match against (must match what was in challenge). */
   context?: string;
   /** Original client IP to match against the signed subject. */

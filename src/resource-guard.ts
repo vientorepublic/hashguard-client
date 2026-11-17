@@ -195,9 +195,7 @@ export class ResourceGuard {
     tokens: string[],
     options: ResourceAccessOptions
   ): Promise<ResourceAccessResult[]> {
-    return Promise.all(
-      tokens.map((token) => this.checkAccess(token, { ...options, token }))
-    );
+    return Promise.all(tokens.map((token) => this.checkAccess(token, options)));
   }
 
   /**
@@ -227,7 +225,7 @@ export class ResourceGuard {
   } {
     return {
       size: this.cache.size(),
-      maxEntries: 1000, // Consider making this accessible from cache
+      maxEntries: this.cache.maxEntries,
     };
   }
 
