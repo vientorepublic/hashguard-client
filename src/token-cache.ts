@@ -22,7 +22,7 @@ export class TokenCache {
    *                        Pass null to disable auto-cleanup.
    */
   constructor(
-    private readonly maxEntries: number = 1000,
+    readonly maxEntries: number = 1000,
     private readonly ttlMs: number = 300_000,
     autoCleanupMs: number | null = 60_000
   ) {

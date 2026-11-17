@@ -56,15 +56,6 @@ export function solvePow(
   // to batched WASM execution so JS can emit events between batches.
   const wasm = getWasmModule();
   if (wasm) {
-    console.log('[PoW Solver] WASM active, solving challenge', {
-      challengeId,
-      seed,
-      targetHex: `${targetHex.substring(0, 16)}...${targetHex.substring(48)}`,
-      targetHexLen: targetHex.length,
-      maxAttempts,
-      timeoutMs,
-    });
-
     if (options.onProgress || options.onEstimate) {
       return solvePowWithWasmBatches(
         wasm,
@@ -92,8 +83,6 @@ export function solvePow(
       progressInterval
     );
     const solveTimeMs = Math.round(Date.now() - startMs);
-
-    console.log('[PoW Solver] WASM solve returned', { rawNonce, solveTimeMs });
 
     if (rawNonce === -2) {
       // Wall-clock timeout inside WASM loop.
@@ -132,28 +121,12 @@ export function solvePow(
   }
 
   // ── JS fallback ───────────────────────────────────────────────────────────
-  console.log('[PoW Solver] Using JS fallback (WASM not available)', {
-    challengeId,
-    seed,
-    targetHex: `${targetHex.substring(0, 16)}...${targetHex.substring(48)}`,
-    targetHexLen: targetHex.length,
-    maxAttempts,
-    timeoutMs,
-  });
-
   for (let nonce = 0; nonce < maxAttempts; nonce++) {
     if (verifyProof(challengeId, seed, String(nonce), targetHex)) {
       const solveTimeMs = Math.round(Date.now() - startMs);
       // Compute the hash for reporting
       const preimage = `${challengeId}:${seed}:${nonce}`;
       const hash = sha256hex(preimage);
-      console.log(
-        '[PoW Solver] Found solution at nonce',
-        nonce,
-        'in',
-        solveTimeMs,
-        'ms'
-      );
       emitEstimate('complete', nonce + 1, solveTimeMs, false);
       return {
         nonce: String(nonce),
